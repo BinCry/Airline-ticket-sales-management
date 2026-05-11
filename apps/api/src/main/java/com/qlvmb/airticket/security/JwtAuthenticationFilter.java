@@ -18,6 +18,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+  public static final String JWT_AUTH_ERROR_ATTRIBUTE = "qlvmb.jwt_auth_error";
+
   private final JwtTokenService jwtTokenService;
 
   public JwtAuthenticationFilter(JwtTokenService jwtTokenService) {
@@ -38,6 +40,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     String token = authorization.substring(7).trim();
     if (token.isEmpty()) {
+      request.setAttribute(JWT_AUTH_ERROR_ATTRIBUTE, "Phiên đăng nhập không hợp lệ hoặc đã hết hạn.");
       filterChain.doFilter(request, response);
       return;
     }
@@ -66,6 +69,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       SecurityContextHolder.getContext().setAuthentication(authentication);
     } catch (JwtException exception) {
       SecurityContextHolder.clearContext();
+      request.setAttribute(JWT_AUTH_ERROR_ATTRIBUTE, "Phiên đăng nhập không hợp lệ hoặc đã hết hạn.");
     }
 
     filterChain.doFilter(request, response);

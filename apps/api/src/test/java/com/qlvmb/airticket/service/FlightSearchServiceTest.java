@@ -184,7 +184,7 @@ class FlightSearchServiceTest {
         0
     ))
         .isInstanceOf(BadRequestException.class)
-        .hasMessage("Ma san bay di khong hop le.");
+        .hasMessage("Mã sân bay đi không hợp lệ.");
   }
 
   @Test
@@ -203,7 +203,7 @@ class FlightSearchServiceTest {
         0
     ))
         .isInstanceOf(BadRequestException.class)
-        .hasMessage("Ngay ve khong duoc truoc ngay di.");
+        .hasMessage("Ngày về không được trước ngày đi.");
   }
 
   @Test
@@ -222,7 +222,7 @@ class FlightSearchServiceTest {
         2
     ))
         .isInstanceOf(BadRequestException.class)
-        .hasMessage("Tong so hanh khach vuot qua gioi han 9 nguoi.");
+        .hasMessage("Tổng số hành khách vượt quá giới hạn 9 người.");
   }
 
   @Test
@@ -241,7 +241,40 @@ class FlightSearchServiceTest {
         0
     ))
         .isInstanceOf(BadRequestException.class)
-        .hasMessage("So luong hanh khach khong hop le.");
+        .hasMessage("Số lượng hành khách không hợp lệ.");
+  }
+
+  @Test
+  void searchFlights_shouldUseAvailableSeatsInsteadOfTotalSeats() {
+    mockAirportExists("SGN", "HAN");
+    FlightEntity outboundFlight = mockFlight(
+        450L,
+        "AU450",
+        "SGN",
+        "Thanh pho Ho Chi Minh",
+        "HAN",
+        "Ha Noi",
+        "2026-03-20T21:00:00+07:00",
+        "2026-03-20T23:10:00+07:00",
+        "scheduled",
+        List.of(mockInventory(2450L, "pho_thong_tiet_kiem", 2, 18, 1590000L))
+    );
+    when(flightRepository.searchRoute(eq("SGN"), eq("HAN"), any(), any())).thenReturn(List.of(outboundFlight));
+
+    FlightSearchResponse response = flightSearchService.searchFlights(
+        "SGN",
+        "HAN",
+        LocalDate.of(2026, 3, 20),
+        null,
+        "one_way",
+        null,
+        1,
+        0,
+        0
+    );
+
+    assertThat(response.outboundFlights()).hasSize(1);
+    assertThat(response.outboundFlights().getFirst().seatsLeft()).isEqualTo(2);
   }
 
   private void mockAirportExists(String... airportCodes) {
@@ -286,11 +319,22 @@ class FlightSearchServiceTest {
     return airport;
   }
 
-  private FlightFareInventoryEntity mockInventory(long id, String fareFamily, int totalSeats, long price) {
+  private FlightFareInventoryEntity mockInventory(long id, String fareFamily, int availableSeats, long price) {
+    return mockInventory(id, fareFamily, availableSeats, availableSeats, price);
+  }
+
+  private FlightFareInventoryEntity mockInventory(
+      long id,
+      String fareFamily,
+      int availableSeats,
+      int totalSeats,
+      long price
+  ) {
     FlightFareInventoryEntity inventory = org.mockito.Mockito.mock(FlightFareInventoryEntity.class);
     when(inventory.getId()).thenReturn(id);
     when(inventory.getFareFamily()).thenReturn(fareFamily);
-    when(inventory.getTotalSeats()).thenReturn(totalSeats);
+    lenient().when(inventory.getTotalSeats()).thenReturn(totalSeats);
+    when(inventory.getAvailableSeats()).thenReturn(availableSeats);
     when(inventory.getPrice()).thenReturn(price);
     return inventory;
   }

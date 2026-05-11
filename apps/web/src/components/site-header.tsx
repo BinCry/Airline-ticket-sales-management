@@ -10,8 +10,9 @@ import {
   loadActiveAuthSession,
   type AuthSession
 } from "@/lib/auth-session";
-import { ROLE_LABELS } from "@/lib/access-control";
-import { mainNavigation, utilityLinks } from "@/lib/mock-data";
+import { hasAnyBackofficeAccess, ROLE_LABELS } from "@/lib/access-control";
+import { utilityLinks } from "@/lib/public-content";
+import { buildMainNavigation } from "@/lib/site-navigation";
 
 export function SiteHeader() {
   const pathname = usePathname();
@@ -43,6 +44,9 @@ export function SiteHeader() {
     primaryRole && primaryRole in ROLE_LABELS
       ? ROLE_LABELS[primaryRole as keyof typeof ROLE_LABELS]
       : null;
+  const roles = authSession?.user.roles ?? [];
+  const navigationLinks = buildMainNavigation(roles);
+  const canOpenBackoffice = hasAnyBackofficeAccess(roles);
 
   return (
     <header className="site-header">
@@ -107,6 +111,14 @@ export function SiteHeader() {
                 </Link>
               </>
             )}
+            {canOpenBackoffice ? (
+              <Link
+                href="/backoffice"
+                className="button button-secondary nav-action-button"
+              >
+                Backoffice
+              </Link>
+            ) : null}
             <Link
               href="/search"
               className="button button-primary nav-action-button"
@@ -126,7 +138,7 @@ export function SiteHeader() {
         </div>
         <div className={isMobileOpen ? "nav-cluster mobile-open" : "nav-cluster"}>
           <nav className="main-nav" aria-label="Điều hướng chính">
-            {mainNavigation.map((link) => {
+            {navigationLinks.map((link) => {
               const isActive =
                 pathname === link.href || pathname.startsWith(`${link.href}/`);
 
@@ -168,6 +180,11 @@ export function SiteHeader() {
                   </Link>
                 </>
               )}
+              {canOpenBackoffice ? (
+                <Link href="/backoffice" className="button button-secondary">
+                  Backoffice
+                </Link>
+              ) : null}
               <Link href="/search" className="button button-primary">
                 Đặt vé
               </Link>

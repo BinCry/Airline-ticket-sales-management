@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { footerColumns } from "@/lib/mock-data";
+import { footerSections } from "@/lib/public-content";
 
 const footerHighlights = [
   "Tổng đài hỗ trợ 1900 6868",
@@ -40,13 +40,13 @@ export function SiteFooter() {
         </div>
       </div>
       <div className="container footer-grid">
-        {footerColumns.map((column) => (
+        {footerSections.map((column) => (
           <section key={column.title} className="footer-section">
             <h3>{column.title}</h3>
             <ul className="footer-links">
               {column.links.map((link) => (
-                <li key={link}>
-                  <Link href="/">{link}</Link>
+                <li key={link.href}>
+                  <Link href={link.href}>{link.label}</Link>
                 </li>
               ))}
             </ul>

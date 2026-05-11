@@ -28,6 +28,9 @@ public class FlightFareInventoryEntity {
   @Column(name = "total_seats", nullable = false)
   private int totalSeats;
 
+  @Column(name = "available_seats", nullable = false)
+  private int availableSeats;
+
   @Column(nullable = false)
   private long price;
 
@@ -50,7 +53,19 @@ public class FlightFareInventoryEntity {
     return totalSeats;
   }
 
+  public int getAvailableSeats() {
+    return availableSeats;
+  }
+
   public long getPrice() {
     return price;
+  }
+
+  public void reserveSeats(int seatCount) {
+    availableSeats -= seatCount;
+  }
+
+  public void releaseSeats(int seatCount) {
+    availableSeats += seatCount;
   }
 }

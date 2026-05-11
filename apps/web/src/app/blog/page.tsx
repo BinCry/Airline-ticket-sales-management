@@ -2,7 +2,7 @@ import Image from "next/image";
 
 import { getTravelArticles } from "@/lib/newsdata";
 import { SectionHeading } from "@/components/section-heading";
-import { promotions } from "@/lib/mock-data";
+import { promotions } from "@/lib/public-content";
 
 const promotionPhotos = [
   {

@@ -7,18 +7,28 @@ import {
   type FareFamily
 } from "@qlvmb/shared-types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+import { ApiClientError, requestApi } from "@/lib/api-client";
 
 type RawSearchParam = string | string[] | undefined;
 
-export class FlightSearchApiError extends Error {
-  status: number;
-
-  constructor(message: string, status: number) {
-    super(message);
+export class FlightSearchApiError extends ApiClientError {
+  constructor(
+    message: string,
+    status: number,
+    errors: Record<string, string> = {},
+    timestamp: string | null = null
+  ) {
+    super(message, status, errors, timestamp);
     this.name = "FlightSearchApiError";
-    this.status = status;
   }
+}
+
+function toFlightSearchApiError(error: unknown): never {
+  if (error instanceof ApiClientError) {
+    throw new FlightSearchApiError(error.message, error.status, error.errors, error.timestamp);
+  }
+
+  throw error;
 }
 
 function layGiaTriDauTien(giaTri: RawSearchParam): string | undefined {
@@ -172,27 +182,20 @@ export async function fetchFlightSearch(
     params.set("fareFamily", criteria.fareFamily);
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/flights/search?${params.toString()}`, {
-    cache: "no-store"
-  });
+  let payload: Partial<ApiFlightSearchResponse>;
 
-  if (!response.ok) {
-    let message = "Không tải được dữ liệu tìm chuyến bay.";
-
-    try {
-      const payload = await response.json();
-
-      if (typeof payload?.message === "string" && payload.message.trim()) {
-        message = payload.message;
+  try {
+    payload = await requestApi<Partial<ApiFlightSearchResponse>>(
+      `/api/flights/search?${params.toString()}`,
+      {
+        fallbackMessage: "Không tải được dữ liệu tìm chuyến bay.",
+        method: "GET",
+        showErrorToast: false
       }
-    } catch {
-      // Không làm gì thêm nếu backend không trả JSON.
-    }
-
-    throw new FlightSearchApiError(message, response.status);
+    );
+  } catch (error) {
+    return toFlightSearchApiError(error);
   }
-
-  const payload = (await response.json()) as Partial<ApiFlightSearchResponse>;
 
   if (
     !payload ||

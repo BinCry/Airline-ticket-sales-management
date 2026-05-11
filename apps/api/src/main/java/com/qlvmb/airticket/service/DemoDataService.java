@@ -45,16 +45,16 @@ public class DemoDataService {
 
   public CustomerOverviewResponse getCustomerOverview() {
     return new CustomerOverviewResponse(
-        "Nguyá»…n Minh Anh",
-        "Háº¡ng VÃ ng",
+        "Nguyễn Minh Anh",
+        "Hạng Vàng",
         12480,
         List.of(
-            "AA215 â€¢ SGN â†’ HAN â€¢ 20/03/2026",
-            "AA330 â€¢ HAN â†’ DAD â€¢ 23/03/2026"
+            "AA215 • SGN → HAN • 20/03/2026",
+            "AA330 • HAN → DAD • 23/03/2026"
         ),
         List.of(
-            "Booking A6C2P1 Ä‘Ã£ thanh toÃ¡n vÃ  gá»­i email.",
-            "Check-in cho AA215 sáº½ má»Ÿ sau 12 giá» ná»¯a."
+            "Booking A6C2P1 đã thanh toán và gửi email.",
+            "Check-in cho AA215 sẽ mở sau 12 giờ nữa."
         )
     );
   }
@@ -169,26 +169,26 @@ public class DemoDataService {
         "held",
         "2026-03-11T14:15:00+07:00",
         List.of(
-            "Chá»n chuyáº¿n bay",
-            "ThÃ´ng tin hÃ nh khÃ¡ch",
-            "Dá»‹ch vá»¥ bá»• trá»£",
-            "Thanh toÃ¡n & xuáº¥t vÃ©"
+            "Chọn chuyến bay",
+            "Thông tin hành khách",
+            "Dịch vụ bổ trợ",
+            "Thanh toán & xuất vé"
         ),
         List.of(
             new BookingOverviewResponse.AncillaryItem(
                 "SEAT_PLUS",
-                "Gháº¿ hÃ ng Ä‘áº§u",
-                "ThÃªm chá»— duá»—i chÃ¢n vÃ  Æ°u tiÃªn xuá»‘ng tÃ u.",
+                "Ghế hàng đầu",
+                "Thêm chỗ duỗi chân và ưu tiên xuống tàu.",
                 320000
             ),
             new BookingOverviewResponse.AncillaryItem(
                 "BAG_23",
-                "HÃ nh lÃ½ 23kg",
-                "Cho phÃ©p mua trÆ°á»›c thanh toÃ¡n hoáº·c sau Ä‘áº·t chá»—.",
+                "Hành lý 23kg",
+                "Cho phép mua trước thanh toán hoặc sau đặt chỗ.",
                 290000
             )
         ),
-        List.of("QR ngÃ¢n hÃ ng", "Tháº»", "VÃ­ Ä‘iá»‡n tá»­")
+        List.of("QR ngân hàng", "Thẻ", "Ví điện tử")
     );
   }
 
@@ -197,21 +197,21 @@ public class DemoDataService {
         List.of(
             new SupportOverviewResponse.TicketCard(
                 "TK-2401",
-                "YÃªu cáº§u hoÃ n vÃ© do delay hÆ¡n 4 giá»",
+                "Yêu cầu hoàn vé do delay hơn 4 giờ",
                 "escalated",
-                "CÃ²n 25 phÃºt"
+                "Còn 25 phút"
             ),
             new SupportOverviewResponse.TicketCard(
                 "TK-2402",
-                "Cáº­p nháº­t há» tÃªn sau xuáº¥t vÃ©",
+                "Cập nhật họ tên sau xuất vé",
                 "open",
-                "CÃ²n 1 giá» 40 phÃºt"
+                "Còn 1 giờ 40 phút"
             )
         ),
         List.of(
-            "TÃ´i cÃ³ thá»ƒ Ä‘á»•i chuyáº¿n sau khi Ä‘Ã£ thanh toÃ¡n khÃ´ng?",
-            "Náº¿u callback thanh toÃ¡n vá» trá»… thÃ¬ sao?",
-            "Chatbot cÃ³ thá»ƒ chuyá»ƒn tÃ´i sang CSKH khÃ´ng?"
+            "Tôi có thể đổi chuyến sau khi đã thanh toán không?",
+            "Nếu callback thanh toán về trễ thì sao?",
+            "Chatbot có thể chuyển tôi sang CSKH không?"
         ),
         List.of("1900 6868", "support@vietnam-airlines.vn", "Chatbot widget")
     );
@@ -221,9 +221,9 @@ public class DemoDataService {
     return new CmsHomepageResponse(
         List.of(
             new CmsHomepageResponse.HeroBanner(
-                "Bay sá»›m Ä‘áº¿n ÄÃ  Náºµng vá»›i combo gháº¿ + hÃ nh lÃ½",
-                "Chiáº¿n dá»‹ch mÃ¹a hÃ¨ cho khÃ¡ch ná»™i Ä‘á»‹a",
-                "Xem Æ°u Ä‘Ã£i",
+                "Bay sớm đến Đà Nẵng với combo ghế + hành lý",
+                "Chiến dịch mùa hè cho khách nội địa",
+                "Xem ưu đãi",
                 "vi"
             ),
             new CmsHomepageResponse.HeroBanner(
@@ -235,9 +235,9 @@ public class DemoDataService {
         ),
         List.of(
             new CmsHomepageResponse.ContentCard(
-                "Cáº©m nang Ä‘i Ná»™i BÃ i gá»n trong 10 phÃºt Ä‘á»c",
-                "Cáº©m nang",
-                "MÃ´ táº£ luá»“ng check-in, hÃ nh lÃ½ vÃ  lá»‘i vÃ o nhanh cho khÃ¡ch cÃ´ng tÃ¡c.",
+                "Cẩm nang đi Nội Bài gọn trong 10 phút đọc",
+                "Cẩm nang",
+                "Mô tả luồng check-in, hành lý và lối vào nhanh cho khách công tác.",
                 "vi"
             ),
             new CmsHomepageResponse.ContentCard(
@@ -249,9 +249,9 @@ public class DemoDataService {
         ),
         List.of(
             new CmsHomepageResponse.ContentCard(
-                "TÃ´i cÃ³ thá»ƒ Ä‘á»•i chuyáº¿n sau khi thanh toÃ¡n khÃ´ng?",
+                "Tôi có thể đổi chuyến sau khi thanh toán không?",
                 "FAQ",
-                "CÃ³. Há»‡ thá»‘ng sáº½ kiá»ƒm tra gÃ³i giÃ¡ vÃ  chÃªnh lá»‡ch trÆ°á»›c khi xÃ¡c nháº­n.",
+                "Có. Hệ thống sẽ kiểm tra gói giá và chênh lệch trước khi xác nhận.",
                 "vi"
             ),
             new CmsHomepageResponse.ContentCard(

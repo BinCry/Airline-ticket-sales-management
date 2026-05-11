@@ -18,7 +18,7 @@ vi.mock("@/lib/chatbot-weather", () => ({
   isWeatherQuestion: isWeatherQuestionMock
 }));
 
-vi.mock("@/lib/mock-data", () => ({
+vi.mock("@/lib/public-content", () => ({
   destinations: []
 }));
 

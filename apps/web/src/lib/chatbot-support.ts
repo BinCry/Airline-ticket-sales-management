@@ -1,4 +1,4 @@
-import { supportChannels, supportFaqs } from "@/lib/mock-data";
+import { supportChannels, supportFaqs } from "@/lib/public-content";
 
 import type { ChatbotAction, ChatbotApiMessage } from "@/lib/chatbot-shared";
 

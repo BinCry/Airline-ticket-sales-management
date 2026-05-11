@@ -130,7 +130,7 @@ public class FlightSearchService {
     }
 
     return inventories.stream()
-        .map(inventory -> flightSearchMapper.toFlightCard(inventory, inventory.getTotalSeats()))
+        .map(inventory -> flightSearchMapper.toFlightCard(inventory, inventory.getAvailableSeats()))
         .filter(card -> card.seatsLeft() > 0)
         .toList();
   }
@@ -147,30 +147,30 @@ public class FlightSearchService {
       int infantCount
   ) {
     if (departureDate == null) {
-      throw new BadRequestException("Ngay di khong duoc de trong.");
+      throw new BadRequestException("Ngày đi không được để trống.");
     }
-    validateAirportCode(from, "di");
-    validateAirportCode(to, "den");
+    validateAirportCode(from, "đi");
+    validateAirportCode(to, "đến");
     if (Objects.equals(from, to)) {
-      throw new BadRequestException("San bay di va den khong duoc trung nhau.");
+      throw new BadRequestException("Sân bay đi và đến không được trùng nhau.");
     }
     if ("round_trip".equals(tripType) && returnDate == null) {
-      throw new BadRequestException("Hanh trinh khu hoi can co ngay ve.");
+      throw new BadRequestException("Hành trình khứ hồi cần có ngày về.");
     }
     if (returnDate != null && returnDate.isBefore(departureDate)) {
-      throw new BadRequestException("Ngay ve khong duoc truoc ngay di.");
+      throw new BadRequestException("Ngày về không được trước ngày đi.");
     }
     if (adultCount < 1) {
-      throw new BadRequestException("Phai co it nhat 1 nguoi lon.");
+      throw new BadRequestException("Phải có ít nhất 1 người lớn.");
     }
     if (childCount < 0 || infantCount < 0) {
-      throw new BadRequestException("So luong hanh khach khong hop le.");
+      throw new BadRequestException("Số lượng hành khách không hợp lệ.");
     }
     if (adultCount + childCount + infantCount > 9) {
-      throw new BadRequestException("Tong so hanh khach vuot qua gioi han 9 nguoi.");
+      throw new BadRequestException("Tổng số hành khách vượt quá giới hạn 9 người.");
     }
     if (infantCount > adultCount) {
-      throw new BadRequestException("So luong em be khong duoc vuot so nguoi lon.");
+      throw new BadRequestException("Số lượng em bé không được vượt số người lớn.");
     }
     if (fareFamily != null) {
       productCatalogService.requireFareMeta(fareFamily);
@@ -179,13 +179,13 @@ public class FlightSearchService {
 
   private void validateAirportCode(String airportCode, String directionLabel) {
     if (!airportRepository.existsByCodeIgnoreCase(airportCode)) {
-      throw new BadRequestException("Ma san bay " + directionLabel + " khong hop le.");
+      throw new BadRequestException("Mã sân bay " + directionLabel + " không hợp lệ.");
     }
   }
 
   private String normalizeAirportCode(String airportCode) {
     if (airportCode == null || airportCode.isBlank()) {
-      throw new BadRequestException("Ma san bay khong duoc de trong.");
+      throw new BadRequestException("Mã sân bay không được để trống.");
     }
     return airportCode.trim().toUpperCase();
   }
@@ -196,10 +196,10 @@ public class FlightSearchService {
     }
     String normalizedTripType = tripType.trim().toLowerCase();
     if ("multi_city".equals(normalizedTripType)) {
-      throw new BadRequestException("Slice hien tai chua ho tro hanh trinh nhieu chang.");
+      throw new BadRequestException("Hiện tại hệ thống chưa hỗ trợ hành trình nhiều chặng.");
     }
     if (!List.of("one_way", "round_trip").contains(normalizedTripType)) {
-      throw new BadRequestException("Loai hanh trinh khong hop le.");
+      throw new BadRequestException("Loại hành trình không hợp lệ.");
     }
     return normalizedTripType;
   }

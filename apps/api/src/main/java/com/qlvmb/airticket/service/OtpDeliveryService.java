@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 public class OtpDeliveryService {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(OtpDeliveryService.class);
+
   private final @Nullable JavaMailSender mailSender;
   private final boolean mailEnabled;
   private final String fromEmail;
@@ -33,10 +34,11 @@ public class OtpDeliveryService {
     }
 
     if (mailSender == null) {
-      throw new IllegalStateException("Chua cau hinh dich vu gui email.");
+      throw new IllegalStateException("Chưa cấu hình dịch vụ gửi email.");
     }
+
     if (fromEmail == null || fromEmail.isBlank()) {
-      throw new IllegalStateException("Chua cau hinh email gui OTP.");
+      throw new IllegalStateException("Chưa cấu hình email gửi OTP.");
     }
 
     SimpleMailMessage message = new SimpleMailMessage();

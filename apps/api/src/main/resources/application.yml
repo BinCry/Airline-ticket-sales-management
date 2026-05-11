@@ -1,6 +1,8 @@
 spring:
   application:
     name: airticket-api
+  mvc:
+    throw-exception-if-no-handler-found: true
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/airticket}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
@@ -31,6 +33,9 @@ spring:
         jdbc:
           time_zone: Asia/Ho_Chi_Minh
         format_sql: true
+  web:
+    resources:
+      add-mappings: false
 
 server:
   port: 8080

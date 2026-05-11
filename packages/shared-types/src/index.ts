@@ -35,6 +35,7 @@ export const BOOKING_STATUSES = [
   "paid",
   "ticketed",
   "checked_in",
+  "refund_pending",
   "changed",
   "cancelled",
   "refunded"
@@ -54,8 +55,8 @@ export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 export const TICKET_STATUSES = [
   "reserved",
   "issued",
+  "checked_in",
   "changed",
-  "boarded",
   "cancelled"
 ] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
@@ -328,4 +329,119 @@ export interface ApiBookingHoldResponse {
   selectedSegments: ApiBookingSelectedSegment[];
   selectedAncillaries: ApiBookingSelectedAncillary[];
   priceSummary: ApiBookingPriceSummary;
+}
+
+export interface ApiPaymentSessionResponse {
+  bookingCode: string;
+  paymentUrl: string;
+  paymentStatus: Extract<PaymentStatus, "pending" | "paid" | "failed" | "expired">;
+  expiresAt: string;
+}
+
+export interface ApiPaymentCallbackRequest {
+  bookingCode: string;
+  result?: "success" | "failed";
+}
+
+export interface ApiCheckinCompleteRequest {
+  bookingCode: string;
+  ticketNumbers: string[];
+}
+
+export interface ApiBoardingPass {
+  ticketNumber: string;
+  passengerName: string;
+  seatNumber: string;
+  gate: string;
+  boardingTime: string;
+  barcode: string;
+}
+
+export interface ApiCheckinCompleteResponse {
+  bookingCode: string;
+  ticketNumbers: string[];
+  boardingPasses: ApiBoardingPass[];
+}
+
+export interface ApiRefundRequest {
+  reason: string;
+}
+
+export interface ApiManageBookingSegment {
+  inventoryId: number;
+  code: string;
+  from: string;
+  to: string;
+  originCode: string;
+  destinationCode: string;
+  departureAt: string;
+  arrivalAt: string;
+  fareFamily: FareFamily;
+  fareTitle: string;
+  pricePerPassenger: number;
+  passengerCount: number;
+  subtotalAmount: number;
+}
+
+export interface ApiManageBookingContact {
+  fullName: string;
+  email: string;
+  phone: string;
+}
+
+export interface ApiManageBookingPassenger {
+  fullName: string;
+  passengerType: PassengerType;
+  dateOfBirth: string;
+  documentType: string;
+  documentNumber: string;
+}
+
+export interface ApiManageBookingAncillary {
+  code: string;
+  name: string;
+  description: string;
+  unitPrice: number;
+  quantity: number;
+  subtotalAmount: number;
+}
+
+export interface ApiManageBookingTicket {
+  ticketNumber: string;
+  passengerName: string;
+  status: Extract<TicketStatus, "issued" | "checked_in" | "cancelled">;
+  issuedAt: string;
+}
+
+export interface ApiRefundRequestSummary {
+  reason: string;
+  refundAmount: number;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
+}
+
+export interface ApiManageBookingPriceSummary {
+  baseAmount: number;
+  ancillaryAmount: number;
+  totalAmount: number;
+  currency: "VND";
+}
+
+export interface ApiManageBookingOverview {
+  bookingCode: string;
+  status: Extract<BookingStatus, "held" | "ticketed" | "refund_pending" | "cancelled">;
+  paymentStatus: Extract<PaymentStatus, "pending" | "paid" | "failed" | "expired">;
+  holdExpiresAt: string | null;
+  ticketedAt: string | null;
+  tripType: Exclude<TripType, "multi_city">;
+  steps: string[];
+  segments: ApiManageBookingSegment[];
+  contact: ApiManageBookingContact | null;
+  passengers: ApiManageBookingPassenger[];
+  ancillaries: ApiManageBookingAncillary[];
+  tickets: ApiManageBookingTicket[];
+  boardingPasses: ApiBoardingPass[];
+  refundRequest: ApiRefundRequestSummary | null;
+  paymentMethods: string[];
+  priceSummary: ApiManageBookingPriceSummary;
 }

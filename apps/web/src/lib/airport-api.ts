@@ -1,6 +1,6 @@
 import type { AirportOption } from "@qlvmb/shared-types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+import { requestApi } from "@/lib/api-client";
 
 function laChuoi(giaTri: unknown): giaTri is string {
   return typeof giaTri === "string";
@@ -32,16 +32,15 @@ export async function fetchAirportOptions(
   }
 
   const params = new URLSearchParams({ query: tuKhoa });
-  const response = await fetch(`${API_BASE_URL}/api/airports?${params.toString()}`, {
-    cache: "no-store",
-    signal
-  });
-
-  if (!response.ok) {
-    throw new Error("Không tải được dữ liệu sân bay.");
-  }
-
-  const payload = await response.json();
+  const payload = await requestApi<unknown[]>(
+    `/api/airports?${params.toString()}`,
+    {
+      fallbackMessage: "Không tải được dữ liệu sân bay.",
+      method: "GET",
+      showErrorToast: false,
+      signal
+    }
+  );
 
   if (!Array.isArray(payload)) {
     return [];

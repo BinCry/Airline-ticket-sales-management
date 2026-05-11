@@ -1,0 +1,757 @@
+package com.qlvmb.airticket.service;
+
+import com.qlvmb.airticket.domain.dto.BookingHoldRequest;
+import com.qlvmb.airticket.domain.dto.BookingHoldResponse;
+import com.qlvmb.airticket.domain.dto.BookingOverviewResponse;
+import com.qlvmb.airticket.domain.dto.RefundRequestCreateRequest;
+import com.qlvmb.airticket.domain.entity.BoardingPassEntity;
+import com.qlvmb.airticket.domain.entity.BookingAncillaryEntity;
+import com.qlvmb.airticket.domain.entity.BookingContactEntity;
+import com.qlvmb.airticket.domain.entity.BookingEntity;
+import com.qlvmb.airticket.domain.entity.BookingPassengerEntity;
+import com.qlvmb.airticket.domain.entity.BookingSegmentEntity;
+import com.qlvmb.airticket.domain.entity.FlightEntity;
+import com.qlvmb.airticket.domain.entity.FlightFareInventoryEntity;
+import com.qlvmb.airticket.domain.entity.RefundRequestEntity;
+import com.qlvmb.airticket.domain.entity.TicketEntity;
+import com.qlvmb.airticket.exception.BadRequestException;
+import com.qlvmb.airticket.exception.NotFoundException;
+import com.qlvmb.airticket.repository.BookingRepository;
+import com.qlvmb.airticket.repository.FlightFareInventoryRepository;
+import com.qlvmb.airticket.repository.TicketRepository;
+import java.security.SecureRandom;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class BookingService {
+
+  public static final int HOLD_MINUTES = 15;
+
+  private static final String CURRENCY = "VND";
+  private static final String BOOKING_NOT_FOUND_MESSAGE = "Kh\u00f4ng t\u00ecm th\u1ea5y \u0111\u1eb7t ch\u1ed7 t\u01b0\u01a1ng \u1ee9ng v\u1edbi m\u00e3 \u0111\u00e3 nh\u1eadp.";
+  private static final String BOOKING_EXPIRED_MESSAGE = "M\u00e3 \u0111\u1eb7t ch\u1ed7 kh\u00f4ng h\u1ee3p l\u1ec7 ho\u1eb7c \u0111\u00e3 h\u1ebft h\u1ea1n gi\u1eef ch\u1ed7.";
+  private static final String WAITING_PAYMENT_MESSAGE = "\u0110\u1eb7t ch\u1ed7 kh\u00f4ng \u1edf tr\u1ea1ng th\u00e1i ch\u1edd thanh to\u00e1n.";
+  private static final String SOLD_OUT_MESSAGE = "Chuy\u1ebfn bay \u0111\u00e3 h\u1ebft gh\u1ebf tr\u1ed1ng cho h\u1ea1ng v\u00e9 n\u00e0y.";
+  private static final String INVENTORY_NOT_FOUND_MESSAGE = "Kh\u00f4ng t\u00ecm th\u1ea5y th\u00f4ng tin gh\u1ebf cho l\u1ef1a ch\u1ecdn \u0111\u00e3 ch\u1ecdn.";
+  private static final String REFUND_NOT_AVAILABLE_MESSAGE = "\u0110\u1eb7t ch\u1ed7 hi\u1ec7n kh\u00f4ng th\u1ec3 g\u1eedi y\u00eau c\u1ea7u ho\u00e0n v\u00e9.";
+  private static final String REFUND_AFTER_CHECKIN_MESSAGE = "Kh\u00f4ng th\u1ec3 g\u1eedi y\u00eau c\u1ea7u ho\u00e0n v\u00e9 sau khi \u0111\u00e3 l\u00e0m th\u1ee7 t\u1ee5c tr\u1ef1c tuy\u1ebfn.";
+  private static final String REFUND_PENDING_MESSAGE = "Y\u00eau c\u1ea7u ho\u00e0n v\u00e9 cho m\u00e3 \u0111\u1eb7t ch\u1ed7 n\u00e0y \u0111ang ch\u1edd x\u1eed l\u00fd.";
+  private static final List<String> PAYMENT_METHODS = List.of("Thanh to\u00e1n (Sandbox)");
+  private static final Set<String> SUPPORTED_TRIP_TYPES = Set.of("one_way", "round_trip");
+  private static final Set<String> SUPPORTED_PASSENGER_TYPES = Set.of("adult", "child", "infant");
+  private static final char[] BOOKING_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".toCharArray();
+
+  private final FlightFareInventoryRepository flightFareInventoryRepository;
+  private final BookingRepository bookingRepository;
+  private final TicketRepository ticketRepository;
+  private final ProductCatalogService productCatalogService;
+  private final SecureRandom secureRandom = new SecureRandom();
+
+  public BookingService(
+      FlightFareInventoryRepository flightFareInventoryRepository,
+      BookingRepository bookingRepository,
+      TicketRepository ticketRepository,
+      ProductCatalogService productCatalogService
+  ) {
+    this.flightFareInventoryRepository = flightFareInventoryRepository;
+    this.bookingRepository = bookingRepository;
+    this.ticketRepository = ticketRepository;
+    this.productCatalogService = productCatalogService;
+  }
+
+  @Transactional
+  public BookingHoldResponse createHold(BookingHoldRequest request) {
+    String tripType = normalizeTripType(request.tripType());
+    validateRequestShape(tripType, request);
+
+    int passengerCount = request.passengers().size();
+    OffsetDateTime currentTime = OffsetDateTime.now();
+    List<Long> inventoryIds = request.segments().stream()
+        .map(BookingHoldRequest.SegmentRequest::inventoryId)
+        .toList();
+
+    List<FlightFareInventoryEntity> lockedInventories =
+        new ArrayList<>(flightFareInventoryRepository.lockByIds(inventoryIds));
+
+    if (lockedInventories.size() != inventoryIds.size()) {
+      throw new BadRequestException(INVENTORY_NOT_FOUND_MESSAGE);
+    }
+
+    Map<Long, FlightFareInventoryEntity> inventoryById = reconcileExpiredHolds(currentTime, lockedInventories);
+    List<PreparedSegment> preparedSegments = new ArrayList<>();
+
+    for (Long inventoryId : inventoryIds) {
+      FlightFareInventoryEntity inventory = inventoryById.get(inventoryId);
+      if (inventory == null) {
+        throw new BadRequestException(INVENTORY_NOT_FOUND_MESSAGE);
+      }
+      if (inventory.getAvailableSeats() < passengerCount) {
+        throw new BadRequestException(SOLD_OUT_MESSAGE);
+      }
+      preparedSegments.add(buildPreparedSegment(inventory, passengerCount));
+    }
+
+    preparedSegments.forEach(segment -> segment.inventory().reserveSeats(passengerCount));
+
+    List<PreparedAncillary> preparedAncillaries = request.ancillaries().stream()
+        .map(this::buildPreparedAncillary)
+        .toList();
+
+    long baseAmount = preparedSegments.stream().mapToLong(PreparedSegment::subtotalAmount).sum();
+    long ancillaryAmount = preparedAncillaries.stream().mapToLong(PreparedAncillary::subtotalAmount).sum();
+    long totalAmount = baseAmount + ancillaryAmount;
+    String bookingCode = generateUniqueBookingCode();
+    OffsetDateTime expiresAt = currentTime.plusMinutes(HOLD_MINUTES);
+
+    BookingEntity booking = BookingEntity.createHold(
+        bookingCode,
+        tripType,
+        baseAmount,
+        ancillaryAmount,
+        totalAmount,
+        CURRENCY,
+        currentTime,
+        expiresAt
+    );
+
+    booking.assignContact(
+        BookingContactEntity.create(
+            booking,
+            request.contact().fullName().trim(),
+            request.contact().email().trim().toLowerCase(),
+            request.contact().phone().trim()
+        )
+    );
+
+    request.passengers().forEach(passengerRequest -> booking.addPassenger(
+        BookingPassengerEntity.create(
+            booking,
+            passengerRequest.fullName().trim(),
+            normalizePassengerType(passengerRequest.passengerType()),
+            passengerRequest.dateOfBirth(),
+            passengerRequest.documentType().trim().toUpperCase(),
+            passengerRequest.documentNumber().trim(),
+            currentTime
+        )
+    ));
+
+    preparedSegments.forEach(segment -> booking.addSegment(
+        BookingSegmentEntity.create(
+            booking,
+            segment.inventory(),
+            segment.code(),
+            segment.fromCity(),
+            segment.toCity(),
+            segment.originCode(),
+            segment.destinationCode(),
+            segment.departureAt(),
+            segment.arrivalAt(),
+            segment.fareFamily(),
+            segment.fareTitle(),
+            segment.pricePerPassenger(),
+            segment.passengerCount(),
+            segment.subtotalAmount(),
+            currentTime
+        )
+    ));
+
+    preparedAncillaries.forEach(ancillary -> booking.addAncillary(
+        BookingAncillaryEntity.create(
+            booking,
+            ancillary.code(),
+            ancillary.name(),
+            ancillary.description(),
+            ancillary.unitPrice(),
+            ancillary.quantity(),
+            ancillary.subtotalAmount(),
+            currentTime
+        )
+    ));
+
+    BookingEntity savedBooking = bookingRepository.save(booking);
+    return mapHoldResponse(savedBooking);
+  }
+
+  @Transactional
+  public BookingOverviewResponse getBookingOverview(String bookingCode) {
+    BookingEntity booking = lockDetailedBooking(bookingCode, BOOKING_NOT_FOUND_MESSAGE);
+    reconcileBookingExpiration(booking, OffsetDateTime.now());
+    return mapOverviewResponse(booking);
+  }
+
+  @Transactional
+  public BookingOverviewResponse requestRefund(String bookingCode, RefundRequestCreateRequest request) {
+    BookingEntity booking = lockDetailedBooking(bookingCode, BOOKING_NOT_FOUND_MESSAGE);
+    OffsetDateTime currentTime = OffsetDateTime.now();
+
+    if (!booking.isTicketed()) {
+      throw new BadRequestException(REFUND_NOT_AVAILABLE_MESSAGE);
+    }
+
+    boolean hasCheckedInTicket = booking.getTickets().stream()
+        .anyMatch(ticket -> TicketEntity.STATUS_CHECKED_IN.equals(ticket.getStatus()));
+    if (hasCheckedInTicket) {
+      throw new BadRequestException(REFUND_AFTER_CHECKIN_MESSAGE);
+    }
+
+    boolean hasPendingRefund = booking.getRefundRequests().stream().anyMatch(RefundRequestEntity::isPending);
+    if (hasPendingRefund || booking.isRefundPending()) {
+      throw new BadRequestException(REFUND_PENDING_MESSAGE);
+    }
+
+    RefundRequestEntity refundRequest = RefundRequestEntity.createPending(
+        booking,
+        request.reason().trim(),
+        booking.getTotalAmount(),
+        currentTime
+    );
+    booking.addRefundRequest(refundRequest);
+    booking.markRefundPending(currentTime);
+
+    return mapOverviewResponse(booking);
+  }
+
+  @Transactional
+  public BookingEntity findBookingForPayment(String bookingCode) {
+    BookingEntity booking = lockDetailedBooking(bookingCode, BOOKING_EXPIRED_MESSAGE);
+    reconcileBookingExpiration(booking, OffsetDateTime.now());
+    if (BookingEntity.STATUS_CANCELLED.equals(booking.getStatus())
+        && BookingEntity.PAYMENT_STATUS_EXPIRED.equals(booking.getPaymentStatus())) {
+      throw new NotFoundException(BOOKING_EXPIRED_MESSAGE);
+    }
+    return booking;
+  }
+
+  @Transactional
+  public BookingEntity lockDetailedBooking(String bookingCode, String notFoundMessage) {
+    if (bookingCode == null || bookingCode.isBlank()) {
+      throw new NotFoundException(notFoundMessage);
+    }
+
+    return bookingRepository.lockDetailedByBookingCode(bookingCode.trim().toUpperCase())
+        .orElseThrow(() -> new NotFoundException(notFoundMessage));
+  }
+
+  public BookingOverviewResponse mapOverviewResponse(BookingEntity booking) {
+    List<BookingOverviewResponse.SegmentItem> segments = booking.getSegments().stream()
+        .map(segment -> new BookingOverviewResponse.SegmentItem(
+            segment.getInventory().getId(),
+            segment.getFlightCode(),
+            segment.getFromCity(),
+            segment.getToCity(),
+            segment.getOriginCode(),
+            segment.getDestinationCode(),
+            segment.getDepartureAt(),
+            segment.getArrivalAt(),
+            segment.getFareFamily(),
+            segment.getFareTitle(),
+            segment.getPricePerPassenger(),
+            segment.getPassengerCount(),
+            segment.getSubtotalAmount()
+        ))
+        .toList();
+
+    BookingContactEntity contact = booking.getContact();
+    BookingOverviewResponse.ContactItem contactItem = contact == null
+        ? null
+        : new BookingOverviewResponse.ContactItem(
+            contact.getFullName(),
+            contact.getEmail(),
+            contact.getPhone()
+        );
+
+    List<BookingOverviewResponse.PassengerItem> passengers = booking.getPassengers().stream()
+        .map(passenger -> new BookingOverviewResponse.PassengerItem(
+            passenger.getFullName(),
+            passenger.getPassengerType(),
+            passenger.getDateOfBirth(),
+            passenger.getDocumentType(),
+            passenger.getDocumentNumber()
+        ))
+        .toList();
+
+    List<BookingOverviewResponse.AncillaryItem> ancillaries = booking.getAncillaries().stream()
+        .map(ancillary -> new BookingOverviewResponse.AncillaryItem(
+            ancillary.getCode(),
+            ancillary.getName(),
+            ancillary.getDescription(),
+            ancillary.getUnitPrice(),
+            ancillary.getQuantity(),
+            ancillary.getSubtotalAmount()
+        ))
+        .toList();
+
+    List<BookingOverviewResponse.TicketItem> tickets = booking.getTickets().stream()
+        .map(ticket -> new BookingOverviewResponse.TicketItem(
+            ticket.getTicketNumber(),
+            ticket.getPassenger().getFullName(),
+            mapTicketStatus(ticket.getStatus()),
+            ticket.getIssuedAt()
+        ))
+        .toList();
+
+    List<BookingOverviewResponse.BoardingPassItem> boardingPasses = booking.getTickets().stream()
+        .map(TicketEntity::getBoardingPass)
+        .filter(Objects::nonNull)
+        .map(boardingPass -> mapBoardingPass(boardingPass, boardingPass.getTicket()))
+        .toList();
+
+    RefundRequestEntity latestRefundRequest = booking.getRefundRequests().stream()
+        .max(Comparator.comparing(RefundRequestEntity::getCreatedAt))
+        .orElse(null);
+
+    BookingOverviewResponse.RefundRequestItem refundRequestItem = latestRefundRequest == null
+        ? null
+        : new BookingOverviewResponse.RefundRequestItem(
+            latestRefundRequest.getReason(),
+            latestRefundRequest.getRefundAmount(),
+            mapRefundStatus(latestRefundRequest.getStatus()),
+            latestRefundRequest.getCreatedAt()
+        );
+
+    return new BookingOverviewResponse(
+        booking.getBookingCode(),
+        mapBookingStatus(booking.getStatus()),
+        mapPaymentStatus(booking.getPaymentStatus()),
+        booking.getExpiresAt(),
+        booking.getTicketedAt(),
+        booking.getTripType(),
+        buildSteps(booking),
+        segments,
+        contactItem,
+        passengers,
+        ancillaries,
+        tickets,
+        boardingPasses,
+        refundRequestItem,
+        PAYMENT_METHODS,
+        new BookingOverviewResponse.PriceSummaryItem(
+            booking.getBaseAmount(),
+            booking.getAncillaryAmount(),
+            booking.getTotalAmount(),
+            booking.getCurrency()
+        )
+    );
+  }
+
+  public void reconcileBookingExpiration(BookingEntity booking, OffsetDateTime currentTime) {
+    if (!booking.isHold() || !booking.isExpired(currentTime)) {
+      return;
+    }
+
+    List<Long> inventoryIds = booking.getSegments().stream()
+        .map(segment -> segment.getInventory().getId())
+        .distinct()
+        .toList();
+
+    Map<Long, FlightFareInventoryEntity> inventoryById = flightFareInventoryRepository.lockByIds(inventoryIds).stream()
+        .collect(Collectors.toMap(
+            FlightFareInventoryEntity::getId,
+            inventory -> inventory,
+            (left, right) -> left,
+            LinkedHashMap::new
+        ));
+
+    cancelExpiredBooking(booking, inventoryById, currentTime);
+  }
+
+  public String mapBookingStatus(String status) {
+    return switch (status) {
+      case BookingEntity.STATUS_HOLD -> "held";
+      case BookingEntity.STATUS_TICKETED -> "ticketed";
+      case BookingEntity.STATUS_REFUND_PENDING -> "refund_pending";
+      case BookingEntity.STATUS_CANCELLED -> "cancelled";
+      default -> status == null ? "held" : status.toLowerCase();
+    };
+  }
+
+  public String mapPaymentStatus(String paymentStatus) {
+    return switch (paymentStatus) {
+      case BookingEntity.PAYMENT_STATUS_PENDING -> "pending";
+      case BookingEntity.PAYMENT_STATUS_PAID -> "paid";
+      case BookingEntity.PAYMENT_STATUS_FAILED -> "failed";
+      case BookingEntity.PAYMENT_STATUS_EXPIRED -> "expired";
+      default -> paymentStatus == null ? "pending" : paymentStatus.toLowerCase();
+    };
+  }
+
+  public String mapTicketStatus(String status) {
+    return switch (status) {
+      case TicketEntity.STATUS_ISSUED -> "issued";
+      case TicketEntity.STATUS_CHECKED_IN -> "checked_in";
+      case TicketEntity.STATUS_CANCELLED -> "cancelled";
+      default -> status == null ? "issued" : status.toLowerCase();
+    };
+  }
+
+  public String mapRefundStatus(String status) {
+    return switch (status) {
+      case RefundRequestEntity.STATUS_PENDING -> "pending";
+      case RefundRequestEntity.STATUS_APPROVED -> "approved";
+      case RefundRequestEntity.STATUS_REJECTED -> "rejected";
+      default -> status == null ? "pending" : status.toLowerCase();
+    };
+  }
+
+  public String getBookingExpiredMessage() {
+    return BOOKING_EXPIRED_MESSAGE;
+  }
+
+  public String getWaitingPaymentMessage() {
+    return WAITING_PAYMENT_MESSAGE;
+  }
+
+  public String getBookingNotFoundMessage() {
+    return BOOKING_NOT_FOUND_MESSAGE;
+  }
+
+  public String generateUniqueTicketNumber() {
+    for (int attempt = 0; attempt < 20; attempt++) {
+      String ticketNumber = "738" + randomNumericCode(10);
+      if (!ticketRepository.existsByTicketNumberIgnoreCase(ticketNumber)) {
+        return ticketNumber;
+      }
+    }
+    throw new IllegalStateException("Kh\u00f4ng th\u1ec3 ph\u00e1t h\u00e0nh v\u00e9 m\u1edbi v\u00e0o l\u00fac n\u00e0y.");
+  }
+  public String generatePaymentReference() {
+    return "SANDBOX-" + randomNumericCode(12);
+  }
+
+  private Map<Long, FlightFareInventoryEntity> reconcileExpiredHolds(
+      OffsetDateTime currentTime,
+      List<FlightFareInventoryEntity> lockedInventories
+  ) {
+    Map<Long, FlightFareInventoryEntity> inventoryById = lockedInventories.stream()
+        .collect(Collectors.toMap(
+            FlightFareInventoryEntity::getId,
+            inventory -> inventory,
+            (left, right) -> left,
+            LinkedHashMap::new
+        ));
+
+    List<BookingEntity> expiredBookings = bookingRepository.lockExpiredHoldsByInventoryIds(
+        BookingEntity.STATUS_HOLD,
+        currentTime,
+        inventoryById.keySet()
+    );
+
+    if (expiredBookings.isEmpty()) {
+      return inventoryById;
+    }
+
+    Set<Long> additionalInventoryIds = expiredBookings.stream()
+        .flatMap(booking -> booking.getSegments().stream())
+        .map(segment -> segment.getInventory().getId())
+        .filter(inventoryId -> !inventoryById.containsKey(inventoryId))
+        .collect(Collectors.toCollection(LinkedHashSet::new));
+
+    if (!additionalInventoryIds.isEmpty()) {
+      flightFareInventoryRepository.lockByIds(additionalInventoryIds).forEach(inventory ->
+          inventoryById.putIfAbsent(inventory.getId(), inventory)
+      );
+    }
+
+    expiredBookings.forEach(booking -> cancelExpiredBooking(booking, inventoryById, currentTime));
+    return inventoryById;
+  }
+
+  private void cancelExpiredBooking(
+      BookingEntity booking,
+      Map<Long, FlightFareInventoryEntity> inventoryById,
+      OffsetDateTime currentTime
+  ) {
+    if (!booking.isHold() || !booking.isExpired(currentTime)) {
+      return;
+    }
+
+    booking.getSegments().forEach(segment -> {
+      FlightFareInventoryEntity inventory = inventoryById.get(segment.getInventory().getId());
+      if (inventory != null) {
+        inventory.releaseSeats(segment.getPassengerCount());
+      }
+    });
+    booking.markExpired(currentTime);
+  }
+
+  private PreparedSegment buildPreparedSegment(FlightFareInventoryEntity inventory, int passengerCount) {
+    FlightEntity flight = inventory.getFlight();
+    ProductCatalogService.FareMeta fareMeta = productCatalogService.requireFareMeta(inventory.getFareFamily());
+    long subtotalAmount = inventory.getPrice() * passengerCount;
+
+    return new PreparedSegment(
+        inventory,
+        flight.getCode(),
+        flight.getOriginAirport().getCityName(),
+        flight.getDestinationAirport().getCityName(),
+        flight.getOriginAirport().getCode(),
+        flight.getDestinationAirport().getCode(),
+        flight.getDepartureAt(),
+        flight.getArrivalAt(),
+        inventory.getFareFamily(),
+        fareMeta.title(),
+        inventory.getPrice(),
+        passengerCount,
+        subtotalAmount
+    );
+  }
+
+  private PreparedAncillary buildPreparedAncillary(BookingHoldRequest.AncillaryRequest ancillaryRequest) {
+    ProductCatalogService.AncillaryMeta ancillaryMeta = productCatalogService.requireAncillary(ancillaryRequest.code());
+    int quantity = ancillaryRequest.quantity() == null ? 1 : ancillaryRequest.quantity();
+
+    if (quantity < 1 || quantity > 9) {
+      throw new BadRequestException("S\u1ed1 l\u01b0\u1ee3ng d\u1ecbch v\u1ee5 b\u1ed5 tr\u1ee3 kh\u00f4ng h\u1ee3p l\u1ec7.");
+    }
+
+    return new PreparedAncillary(
+        ancillaryMeta.code(),
+        ancillaryMeta.name(),
+        ancillaryMeta.description(),
+        ancillaryMeta.price(),
+        quantity,
+        ancillaryMeta.price() * quantity
+    );
+  }
+  private BookingHoldResponse mapHoldResponse(BookingEntity booking) {
+    List<BookingHoldResponse.PassengerResponse> passengers = booking.getPassengers().stream()
+        .map(passenger -> new BookingHoldResponse.PassengerResponse(
+            passenger.getFullName(),
+            passenger.getPassengerType(),
+            passenger.getDateOfBirth(),
+            passenger.getDocumentType(),
+            passenger.getDocumentNumber()
+        ))
+        .toList();
+
+    List<BookingHoldResponse.SelectedSegmentResponse> selectedSegments = booking.getSegments().stream()
+        .map(segment -> new BookingHoldResponse.SelectedSegmentResponse(
+            segment.getInventory().getId(),
+            segment.getFlightCode(),
+            segment.getFromCity(),
+            segment.getToCity(),
+            segment.getOriginCode(),
+            segment.getDestinationCode(),
+            segment.getDepartureAt(),
+            segment.getArrivalAt(),
+            segment.getFareFamily(),
+            segment.getFareTitle(),
+            segment.getPricePerPassenger(),
+            segment.getPassengerCount(),
+            segment.getSubtotalAmount()
+        ))
+        .toList();
+
+    List<BookingHoldResponse.SelectedAncillaryResponse> selectedAncillaries = booking.getAncillaries().stream()
+        .map(ancillary -> new BookingHoldResponse.SelectedAncillaryResponse(
+            ancillary.getCode(),
+            ancillary.getName(),
+            ancillary.getDescription(),
+            ancillary.getUnitPrice(),
+            ancillary.getQuantity(),
+            ancillary.getSubtotalAmount()
+        ))
+        .toList();
+
+    BookingContactEntity contact = booking.getContact();
+    return new BookingHoldResponse(
+        booking.getBookingCode(),
+        mapBookingStatus(booking.getStatus()),
+        booking.getExpiresAt(),
+        booking.getCreatedAt(),
+        booking.getTripType(),
+        new BookingHoldResponse.ContactResponse(
+            contact.getFullName(),
+            contact.getEmail(),
+            contact.getPhone()
+        ),
+        passengers,
+        selectedSegments,
+        selectedAncillaries,
+        new BookingHoldResponse.PriceSummaryResponse(
+            booking.getBaseAmount(),
+            booking.getAncillaryAmount(),
+            booking.getTotalAmount(),
+            booking.getCurrency()
+        )
+    );
+  }
+
+  private BookingOverviewResponse.BoardingPassItem mapBoardingPass(BoardingPassEntity boardingPass, TicketEntity ticket) {
+    return new BookingOverviewResponse.BoardingPassItem(
+        ticket.getTicketNumber(),
+        ticket.getPassenger().getFullName(),
+        boardingPass.getSeatNumber(),
+        boardingPass.getGate(),
+        boardingPass.getBoardingTime(),
+        boardingPass.getBarcode()
+    );
+  }
+
+  private List<String> buildSteps(BookingEntity booking) {
+    List<String> steps = new ArrayList<>(List.of(
+        "Ch\u1ecdn chuy\u1ebfn bay",
+        "Nh\u1eadp th\u00f4ng tin h\u00e0nh kh\u00e1ch",
+        "Gi\u1eef ch\u1ed7 th\u00e0nh c\u00f4ng"
+    ));
+
+    if (booking.isHold()) {
+      steps.add("Ch\u1edd thanh to\u00e1n");
+      return steps;
+    }
+
+    if (BookingEntity.STATUS_CANCELLED.equals(booking.getStatus())) {
+      steps.add("Gi\u1eef ch\u1ed7 \u0111\u00e3 h\u1ebft h\u1ea1n ho\u1eb7c b\u1ecb h\u1ee7y");
+      return steps;
+    }
+
+    steps.add("Thanh to\u00e1n th\u00e0nh c\u00f4ng");
+    steps.add("Xu\u1ea5t v\u00e9 th\u00e0nh c\u00f4ng");
+
+    if (booking.getTickets().stream().anyMatch(ticket -> TicketEntity.STATUS_CHECKED_IN.equals(ticket.getStatus()))) {
+      steps.add("Ho\u00e0n t\u1ea5t l\u00e0m th\u1ee7 t\u1ee5c tr\u1ef1c tuy\u1ebfn");
+    }
+
+    if (booking.isRefundPending()) {
+      steps.add("\u0110ang ch\u1edd duy\u1ec7t ho\u00e0n v\u00e9");
+    }
+
+    return steps;
+  }
+
+  private void validateRequestShape(String tripType, BookingHoldRequest request) {
+    if ("one_way".equals(tripType) && request.segments().size() != 1) {
+      throw new BadRequestException("H\u00e0nh tr\u00ecnh m\u1ed9t chi\u1ec1u ch\u1ec9 \u0111\u01b0\u1ee3c ch\u1ecdn 1 ch\u1eb7ng.");
+    }
+
+    if ("round_trip".equals(tripType) && request.segments().size() != 2) {
+      throw new BadRequestException("H\u00e0nh tr\u00ecnh kh\u1ee9 h\u1ed3i c\u1ea7n ch\u1ecdn \u0111\u1ee7 chi\u1ec1u \u0111i v\u00e0 chi\u1ec1u v\u1ec1.");
+    }
+
+    Set<Long> inventoryIds = new LinkedHashSet<>();
+    request.segments().forEach(segmentRequest -> {
+      if (!inventoryIds.add(segmentRequest.inventoryId())) {
+        throw new BadRequestException("Kh\u00f4ng \u0111\u01b0\u1ee3c ch\u1ecdn tr\u00f9ng kho gh\u1ebf trong c\u00f9ng m\u1ed9t \u0111\u1eb7t ch\u1ed7.");
+      }
+    });
+
+    long adultCount = request.passengers().stream()
+        .map(BookingHoldRequest.PassengerRequest::passengerType)
+        .map(this::normalizePassengerType)
+        .filter("adult"::equals)
+        .count();
+
+    long infantCount = request.passengers().stream()
+        .map(BookingHoldRequest.PassengerRequest::passengerType)
+        .map(this::normalizePassengerType)
+        .filter("infant"::equals)
+        .count();
+
+    if (adultCount < 1) {
+      throw new BadRequestException("Ph\u1ea3i c\u00f3 \u00edt nh\u1ea5t 1 ng\u01b0\u1eddi l\u1edbn trong \u0111\u1eb7t ch\u1ed7.");
+    }
+
+    if (infantCount > adultCount) {
+      throw new BadRequestException("S\u1ed1 l\u01b0\u1ee3ng em b\u00e9 kh\u00f4ng \u0111\u01b0\u1ee3c v\u01b0\u1ee3t qu\u00e1 s\u1ed1 ng\u01b0\u1eddi l\u1edbn.");
+    }
+
+    request.passengers().forEach(passengerRequest -> {
+      if (passengerRequest.dateOfBirth().isAfter(LocalDate.now())) {
+        throw new BadRequestException("Ng\u00e0y sinh h\u00e0nh kh\u00e1ch kh\u00f4ng h\u1ee3p l\u1ec7.");
+      }
+    });
+  }
+
+  private String normalizeTripType(String tripType) {
+    if (tripType == null || tripType.isBlank()) {
+      throw new BadRequestException("Lo\u1ea1i h\u00e0nh tr\u00ecnh kh\u00f4ng \u0111\u01b0\u1ee3c \u0111\u1ec3 tr\u1ed1ng.");
+    }
+
+    String normalizedTripType = tripType.trim().toLowerCase();
+    if (!SUPPORTED_TRIP_TYPES.contains(normalizedTripType)) {
+      throw new BadRequestException("Lo\u1ea1i h\u00e0nh tr\u00ecnh kh\u00f4ng h\u1ee3p l\u1ec7.");
+    }
+    return normalizedTripType;
+  }
+
+  private String normalizePassengerType(String passengerType) {
+    if (passengerType == null || passengerType.isBlank()) {
+      throw new BadRequestException("Lo\u1ea1i h\u00e0nh kh\u00e1ch kh\u00f4ng \u0111\u01b0\u1ee3c \u0111\u1ec3 tr\u1ed1ng.");
+    }
+
+    String normalizedPassengerType = passengerType.trim().toLowerCase();
+    if (!SUPPORTED_PASSENGER_TYPES.contains(normalizedPassengerType)) {
+      throw new BadRequestException("Lo\u1ea1i h\u00e0nh kh\u00e1ch kh\u00f4ng h\u1ee3p l\u1ec7.");
+    }
+    return normalizedPassengerType;
+  }
+
+  private String generateUniqueBookingCode() {
+    for (int attempt = 0; attempt < 20; attempt++) {
+      String bookingCode = randomAlphaNumericCode(6);
+      if (!bookingRepository.existsByBookingCodeIgnoreCase(bookingCode)) {
+        return bookingCode;
+      }
+    }
+    throw new IllegalStateException("Kh\u00f4ng th\u1ec3 t\u1ea1o m\u00e3 \u0111\u1eb7t ch\u1ed7 m\u1edbi v\u00e0o l\u00fac n\u00e0y.");
+  }
+  private String randomAlphaNumericCode(int length) {
+    StringBuilder builder = new StringBuilder(length);
+    for (int index = 0; index < length; index++) {
+      builder.append(BOOKING_CODE_ALPHABET[secureRandom.nextInt(BOOKING_CODE_ALPHABET.length)]);
+    }
+    return builder.toString();
+  }
+
+  private String randomNumericCode(int length) {
+    StringBuilder builder = new StringBuilder(length);
+    for (int index = 0; index < length; index++) {
+      builder.append(secureRandom.nextInt(10));
+    }
+    return builder.toString();
+  }
+
+  private record PreparedSegment(
+      FlightFareInventoryEntity inventory,
+      String code,
+      String fromCity,
+      String toCity,
+      String originCode,
+      String destinationCode,
+      OffsetDateTime departureAt,
+      OffsetDateTime arrivalAt,
+      String fareFamily,
+      String fareTitle,
+      long pricePerPassenger,
+      int passengerCount,
+      long subtotalAmount
+  ) {
+  }
+
+  private record PreparedAncillary(
+      String code,
+      String name,
+      String description,
+      long unitPrice,
+      int quantity,
+      long subtotalAmount
+  ) {
+  }
+}
+
+
+
+

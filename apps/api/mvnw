@@ -1,0 +1,14 @@
+#!/bin/sh
+set -euf
+
+MVNW_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+WRAPPER_JAR="$MVNW_DIR/.mvn/wrapper/maven-wrapper.jar"
+WRAPPER_PROPERTIES="$MVNW_DIR/.mvn/wrapper/maven-wrapper.properties"
+JAVA_EXE="${JAVA_HOME:+$JAVA_HOME/bin/}java"
+
+if [ ! -f "$WRAPPER_JAR" ]; then
+  echo "Khong tim thay maven-wrapper.jar trong .mvn/wrapper." >&2
+  exit 1
+fi
+
+exec "$JAVA_EXE" "-Dmaven.multiModuleProjectDirectory=$MVNW_DIR" -classpath "$WRAPPER_JAR" org.apache.maven.wrapper.MavenWrapperMain "$@"

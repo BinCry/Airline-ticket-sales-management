@@ -8,7 +8,7 @@ import {
   loadActiveAuthSession
 } from "@/lib/auth-session";
 import type { BackofficeModuleKey } from "@/lib/access-control";
-import { canAccessBackofficeModuleByPermissions } from "@/lib/access-control";
+import { canAccessBackofficeModuleByRoles } from "@/lib/access-control";
 
 type BackofficeAccessChipProps = {
   moduleKey: BackofficeModuleKey;
@@ -22,7 +22,7 @@ export function BackofficeAccessChip({ moduleKey }: BackofficeAccessChipProps) {
       const authSession = loadActiveAuthSession();
       setHasAccess(
         authSession
-          ? canAccessBackofficeModuleByPermissions(authSession.user.permissions, moduleKey)
+          ? canAccessBackofficeModuleByRoles(authSession.user.roles, moduleKey)
           : false
       );
     }
@@ -44,7 +44,6 @@ export function BackofficeAccessChip({ moduleKey }: BackofficeAccessChipProps) {
   return hasAccess ? (
     <StatusChip tone="success" label="Có quyền" />
   ) : (
-    <StatusChip tone="warning" label="Chỉ xem" />
+    <StatusChip tone="warning" label="Không có quyền" />
   );
 }
-

@@ -1,3 +1,9 @@
+import {
+  ApiClientError,
+  requestApi,
+  resolveApiClientErrorMessage
+} from "@/lib/api-client";
+
 export interface MyProfile {
   id: number;
   email: string;
@@ -32,34 +38,24 @@ export interface UpsertMyPassengerPayload {
   isPrimary: boolean;
 }
 
-interface MyAccountApiErrorResponse {
-  message?: string;
-  errors?: Record<string, string>;
-}
-
-export class MyAccountApiError extends Error {
-  status: number;
-  errors: Record<string, string>;
-
-  constructor(message: string, status: number, errors: Record<string, string> = {}) {
-    super(message);
+export class MyAccountApiError extends ApiClientError {
+  constructor(
+    message: string,
+    status: number,
+    errors: Record<string, string> = {},
+    timestamp: string | null = null
+  ) {
+    super(message, status, errors, timestamp);
     this.name = "MyAccountApiError";
-    this.status = status;
-    this.errors = errors;
   }
 }
 
-function sanitizeErrors(value: unknown): Record<string, string> {
-  if (!value || typeof value !== "object") {
-    return {};
+function toMyAccountApiError(error: unknown): never {
+  if (error instanceof ApiClientError) {
+    throw new MyAccountApiError(error.message, error.status, error.errors, error.timestamp);
   }
 
-  return Object.fromEntries(
-    Object.entries(value).filter(
-      ([fieldName, fieldMessage]) =>
-        typeof fieldName === "string" && typeof fieldMessage === "string"
-    )
-  );
+  throw error;
 }
 
 function sanitizeRoles(value: unknown): string[] {
@@ -110,37 +106,6 @@ function isMyPassengerList(value: unknown): value is MyPassenger[] {
   return Array.isArray(value) && value.every((item) => isMyPassenger(item));
 }
 
-async function buildMyAccountApiError(response: Response): Promise<MyAccountApiError> {
-  let apiError: MyAccountApiErrorResponse | null = null;
-
-  try {
-    apiError = (await response.json()) as MyAccountApiErrorResponse;
-  } catch {
-    apiError = null;
-  }
-
-  const fallbackMessage =
-    response.status === 401
-      ? "Phiên đăng nhập đã hết hạn hoặc không hợp lệ."
-      : "Không thể tải dữ liệu tài khoản lúc này.";
-  const message =
-    typeof apiError?.message === "string" && apiError.message.trim()
-      ? apiError.message
-      : fallbackMessage;
-
-  return new MyAccountApiError(message, response.status, sanitizeErrors(apiError?.errors));
-}
-
-function getMyAccountApiBaseUrl(): string {
-  const configuredBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
-
-  if (!configuredBaseUrl) {
-    return "http://localhost:8080";
-  }
-
-  return configuredBaseUrl.replace(/\/+$/, "");
-}
-
 function normalizeMyProfile(payload: MyProfile): MyProfile {
   return {
     ...payload,
@@ -155,36 +120,21 @@ async function sendProfileMutation(
   method: "GET" | "PATCH",
   payload?: UpdateMyProfilePayload
 ): Promise<MyProfile> {
-  let response: Response;
+  let result: unknown;
 
   try {
-    response = await fetch(`${getMyAccountApiBaseUrl()}${endpoint}`, {
-      method,
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${accessToken}`,
-        ...(payload
-          ? {
-              "Content-Type": "application/json"
-            }
-          : {})
-      },
-      ...(payload
-        ? {
-            body: JSON.stringify(payload)
-          }
-        : {}),
-      cache: "no-store"
+    result = await requestApi<unknown>(endpoint, {
+      accessToken,
+      fallbackMessage:
+        method === "GET"
+          ? "Không thể tải dữ liệu tài khoản lúc này."
+          : "Không thể cập nhật hồ sơ tài khoản lúc này.",
+      json: payload,
+      method
     });
-  } catch {
-    throw new MyAccountApiError("Không thể kết nối tới máy chủ tài khoản.", 0);
+  } catch (error) {
+    return toMyAccountApiError(error);
   }
-
-  if (!response.ok) {
-    throw await buildMyAccountApiError(response);
-  }
-
-  const result = (await response.json()) as unknown;
 
   if (!isMyProfile(result)) {
     throw new MyAccountApiError("Dữ liệu hồ sơ trả về không hợp lệ.", 500);
@@ -205,26 +155,17 @@ export function updateMyProfile(
 }
 
 export async function fetchMyPassengers(accessToken: string): Promise<MyPassenger[]> {
-  let response: Response;
+  let payload: unknown;
 
   try {
-    response = await fetch(`${getMyAccountApiBaseUrl()}/api/me/passengers`, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${accessToken}`
-      },
-      cache: "no-store"
+    payload = await requestApi<unknown>("/api/me/passengers", {
+      accessToken,
+      fallbackMessage: "Không thể tải danh sách hành khách lúc này.",
+      method: "GET"
     });
-  } catch {
-    throw new MyAccountApiError("Không thể kết nối tới máy chủ tài khoản.", 0);
+  } catch (error) {
+    return toMyAccountApiError(error);
   }
-
-  if (!response.ok) {
-    throw await buildMyAccountApiError(response);
-  }
-
-  const payload = (await response.json()) as unknown;
 
   if (!isMyPassengerList(payload)) {
     throw new MyAccountApiError("Dữ liệu hành khách trả về không hợp lệ.", 500);
@@ -239,28 +180,18 @@ async function sendPassengerMutation(
   method: "POST" | "PATCH",
   payload: UpsertMyPassengerPayload
 ): Promise<MyPassenger> {
-  let response: Response;
+  let result: unknown;
 
   try {
-    response = await fetch(`${getMyAccountApiBaseUrl()}${endpoint}`, {
-      method,
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload),
-      cache: "no-store"
+    result = await requestApi<unknown>(endpoint, {
+      accessToken,
+      fallbackMessage: "Không thể lưu hành khách lúc này.",
+      json: payload,
+      method
     });
-  } catch {
-    throw new MyAccountApiError("Không thể kết nối tới máy chủ tài khoản.", 0);
+  } catch (error) {
+    return toMyAccountApiError(error);
   }
-
-  if (!response.ok) {
-    throw await buildMyAccountApiError(response);
-  }
-
-  const result = (await response.json()) as unknown;
 
   if (!isMyPassenger(result)) {
     throw new MyAccountApiError("Dữ liệu hành khách trả về không hợp lệ.", 500);
@@ -288,22 +219,20 @@ export async function deleteMyPassenger(
   accessToken: string,
   passengerId: number
 ): Promise<void> {
-  let response: Response;
-
   try {
-    response = await fetch(`${getMyAccountApiBaseUrl()}/api/me/passengers/${passengerId}`, {
-      method: "DELETE",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${accessToken}`
-      },
-      cache: "no-store"
+    await requestApi<void>(`/api/me/passengers/${passengerId}`, {
+      accessToken,
+      fallbackMessage: "Không thể xóa hành khách lúc này.",
+      method: "DELETE"
     });
-  } catch {
-    throw new MyAccountApiError("Không thể kết nối tới máy chủ tài khoản.", 0);
+  } catch (error) {
+    return toMyAccountApiError(error);
   }
+}
 
-  if (!response.ok) {
-    throw await buildMyAccountApiError(response);
-  }
+export function resolveMyAccountErrorMessage(
+  error: unknown,
+  fallbackMessage: string
+): string {
+  return resolveApiClientErrorMessage(error, fallbackMessage);
 }

@@ -1,11 +1,17 @@
 package com.qlvmb.airticket.controller;
 
+import com.qlvmb.airticket.domain.dto.BookingHoldRequest;
+import com.qlvmb.airticket.domain.dto.BookingHoldResponse;
 import com.qlvmb.airticket.domain.dto.BookingOverviewResponse;
-import com.qlvmb.airticket.security.PermissionCode;
-import com.qlvmb.airticket.service.DemoDataService;
-import org.springframework.security.access.prepost.PreAuthorize;
+import com.qlvmb.airticket.domain.dto.PaymentSessionResponse;
+import com.qlvmb.airticket.domain.dto.RefundRequestCreateRequest;
+import com.qlvmb.airticket.service.BookingService;
+import com.qlvmb.airticket.service.PaymentService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -13,21 +19,37 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/bookings")
 public class BookingController {
 
-  private final DemoDataService demoDataService;
+  private final BookingService bookingService;
+  private final PaymentService paymentService;
 
-  public BookingController(DemoDataService demoDataService) {
-    this.demoDataService = demoDataService;
+  public BookingController(
+      BookingService bookingService,
+      PaymentService paymentService
+  ) {
+    this.bookingService = bookingService;
+    this.paymentService = paymentService;
   }
 
-  @PreAuthorize("hasAuthority('" + PermissionCode.CUSTOMER_SELF_SERVICE + "')")
-  @GetMapping("/checkout-preview")
-  public BookingOverviewResponse getCheckoutPreview() {
-    return demoDataService.getBookingOverview("A6C2P1");
+  @PostMapping("/holds")
+  public BookingHoldResponse createHold(@Valid @RequestBody BookingHoldRequest request) {
+    return bookingService.createHold(request);
   }
 
-  @PreAuthorize("hasAnyAuthority('" + PermissionCode.PUBLIC_BOOKING_LOOKUP + "', '" + PermissionCode.CUSTOMER_SELF_SERVICE + "')")
   @GetMapping("/manage/{bookingCode}")
   public BookingOverviewResponse getBooking(@PathVariable String bookingCode) {
-    return demoDataService.getBookingOverview(bookingCode);
+    return bookingService.getBookingOverview(bookingCode);
+  }
+
+  @PostMapping("/{bookingCode}/refund-request")
+  public BookingOverviewResponse createRefundRequest(
+      @PathVariable String bookingCode,
+      @Valid @RequestBody RefundRequestCreateRequest request
+  ) {
+    return bookingService.requestRefund(bookingCode, request);
+  }
+
+  @PostMapping("/{bookingCode}/payments/session")
+  public PaymentSessionResponse createPaymentSession(@PathVariable String bookingCode) {
+    return paymentService.createPaymentSession(bookingCode);
   }
 }

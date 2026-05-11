@@ -36,7 +36,7 @@ public class ProductCatalogService {
   public FareMeta requireFareMeta(String fareFamily) {
     FareMeta fareMeta = FARE_CATALOG.get(normalizeFareFamily(fareFamily));
     if (fareMeta == null) {
-      throw new BadRequestException("Goi gia duoc chon khong hop le.");
+      throw new BadRequestException("Gói giá được chọn không hợp lệ.");
     }
     return fareMeta;
   }
@@ -44,7 +44,7 @@ public class ProductCatalogService {
   public AncillaryMeta requireAncillary(String code) {
     AncillaryMeta ancillaryMeta = ANCILLARY_CATALOG.get(normalizeAncillaryCode(code));
     if (ancillaryMeta == null) {
-      throw new BadRequestException("Dich vu bo tro duoc chon khong hop le.");
+      throw new BadRequestException("Dịch vụ bổ trợ được chọn không hợp lệ.");
     }
     return ancillaryMeta;
   }

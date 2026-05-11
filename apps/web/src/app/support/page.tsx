@@ -1,7 +1,7 @@
 import Image from "next/image";
 
 import { SectionHeading } from "@/components/section-heading";
-import { supportChannels, supportFaqs } from "@/lib/mock-data";
+import { supportChannels, supportFaqs } from "@/lib/public-content";
 
 const airportCards = [
   "Nội Bài: mở quầy trước 2 giờ, khu vực C và D có quầy làm thủ tục tự động.",

@@ -1,0 +1,202 @@
+import type {
+  ApiBoardingPass,
+  ApiBookingHoldResponse,
+  ApiCheckinCompleteRequest,
+  ApiCheckinCompleteResponse,
+  ApiCreateBookingHoldRequest,
+  ApiManageBookingOverview,
+  ApiPaymentCallbackRequest,
+  ApiPaymentSessionResponse,
+  ApiRefundRequest
+} from "@qlvmb/shared-types";
+
+import { ApiClientError, requestApi } from "@/lib/api-client";
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isBoardingPass(value: unknown): value is ApiBoardingPass {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.ticketNumber === "string" &&
+    typeof value.passengerName === "string" &&
+    typeof value.seatNumber === "string" &&
+    typeof value.gate === "string" &&
+    typeof value.boardingTime === "string" &&
+    typeof value.barcode === "string"
+  );
+}
+
+function isManageOverview(value: unknown): value is ApiManageBookingOverview {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.bookingCode === "string" &&
+    typeof value.status === "string" &&
+    typeof value.paymentStatus === "string" &&
+    (value.holdExpiresAt === null || typeof value.holdExpiresAt === "string") &&
+    (value.ticketedAt === null || typeof value.ticketedAt === "string") &&
+    typeof value.tripType === "string" &&
+    Array.isArray(value.steps) &&
+    Array.isArray(value.segments) &&
+    Array.isArray(value.passengers) &&
+    Array.isArray(value.ancillaries) &&
+    Array.isArray(value.tickets) &&
+    Array.isArray(value.boardingPasses) &&
+    (value.refundRequest === null || isObject(value.refundRequest)) &&
+    Array.isArray(value.paymentMethods) &&
+    isStringArray(value.paymentMethods) &&
+    isObject(value.priceSummary)
+  );
+}
+
+function isPaymentSessionResponse(value: unknown): value is ApiPaymentSessionResponse {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.bookingCode === "string" &&
+    typeof value.paymentUrl === "string" &&
+    typeof value.paymentStatus === "string" &&
+    typeof value.expiresAt === "string"
+  );
+}
+
+function isHoldResponse(value: unknown): value is ApiBookingHoldResponse {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.bookingCode === "string" &&
+    typeof value.status === "string" &&
+    typeof value.expiresAt === "string" &&
+    typeof value.createdAt === "string" &&
+    typeof value.tripType === "string" &&
+    isObject(value.contact) &&
+    Array.isArray(value.passengers) &&
+    Array.isArray(value.selectedSegments) &&
+    Array.isArray(value.selectedAncillaries) &&
+    isObject(value.priceSummary)
+  );
+}
+
+function isCheckinResponse(value: unknown): value is ApiCheckinCompleteResponse {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.bookingCode === "string" &&
+    isStringArray(value.ticketNumbers) &&
+    Array.isArray(value.boardingPasses) &&
+    value.boardingPasses.every(isBoardingPass)
+  );
+}
+
+export async function createBookingHold(
+  payload: ApiCreateBookingHoldRequest,
+  accessToken?: string
+): Promise<ApiBookingHoldResponse> {
+  const response = await requestApi<unknown>("/api/bookings/holds", {
+    accessToken,
+    fallbackMessage: "Kh\u00f4ng th\u1ec3 gi\u1eef ch\u1ed7 l\u00fac n\u00e0y.",
+    json: payload,
+    method: "POST"
+  });
+
+  if (!isHoldResponse(response)) {
+    throw new ApiClientError("D\u1eef li\u1ec7u gi\u1eef ch\u1ed7 tr\u1ea3 v\u1ec1 kh\u00f4ng h\u1ee3p l\u1ec7.", 500);
+  }
+
+  return response;
+}
+
+export async function createPaymentSession(
+  bookingCode: string,
+  accessToken?: string
+): Promise<ApiPaymentSessionResponse> {
+  const response = await requestApi<unknown>(
+    `/api/bookings/${encodeURIComponent(bookingCode.trim())}/payments/session`,
+    {
+      accessToken,
+      fallbackMessage: "Kh\u00f4ng th\u1ec3 kh\u1edfi t\u1ea1o phi\u00ean thanh to\u00e1n l\u00fac n\u00e0y.",
+      method: "POST"
+    }
+  );
+
+  if (!isPaymentSessionResponse(response)) {
+    throw new ApiClientError("D\u1eef li\u1ec7u phi\u00ean thanh to\u00e1n tr\u1ea3 v\u1ec1 kh\u00f4ng h\u1ee3p l\u1ec7.", 500);
+  }
+
+  return response;
+}
+
+export async function submitSandboxPayment(
+  payload: ApiPaymentCallbackRequest,
+  accessToken?: string
+): Promise<ApiManageBookingOverview> {
+  const response = await requestApi<unknown>("/api/payments/callback", {
+    accessToken,
+    fallbackMessage: "Kh\u00f4ng th\u1ec3 x\u00e1c nh\u1eadn thanh to\u00e1n l\u00fac n\u00e0y.",
+    json: payload,
+    method: "POST"
+  });
+
+  if (!isManageOverview(response)) {
+    throw new ApiClientError("D\u1eef li\u1ec7u thanh to\u00e1n tr\u1ea3 v\u1ec1 kh\u00f4ng h\u1ee3p l\u1ec7.", 500);
+  }
+
+  return response;
+}
+
+export async function completeCheckin(
+  payload: ApiCheckinCompleteRequest,
+  accessToken?: string
+): Promise<ApiCheckinCompleteResponse> {
+  const response = await requestApi<unknown>("/api/check-in/complete", {
+    accessToken,
+    fallbackMessage: "Kh\u00f4ng th\u1ec3 ho\u00e0n t\u1ea5t l\u00e0m th\u1ee7 t\u1ee5c tr\u1ef1c tuy\u1ebfn l\u00fac n\u00e0y.",
+    json: payload,
+    method: "POST"
+  });
+
+  if (!isCheckinResponse(response)) {
+    throw new ApiClientError("D\u1eef li\u1ec7u l\u00e0m th\u1ee7 t\u1ee5c tr\u1ef1c tuy\u1ebfn tr\u1ea3 v\u1ec1 kh\u00f4ng h\u1ee3p l\u1ec7.", 500);
+  }
+
+  return response;
+}
+
+export async function createRefundRequest(
+  bookingCode: string,
+  payload: ApiRefundRequest,
+  accessToken?: string
+): Promise<ApiManageBookingOverview> {
+  const response = await requestApi<unknown>(
+    `/api/bookings/${encodeURIComponent(bookingCode.trim())}/refund-request`,
+    {
+      accessToken,
+      fallbackMessage: "Kh\u00f4ng th\u1ec3 g\u1eedi y\u00eau c\u1ea7u ho\u00e0n v\u00e9 l\u00fac n\u00e0y.",
+      json: payload,
+      method: "POST"
+    }
+  );
+
+  if (!isManageOverview(response)) {
+    throw new ApiClientError("D\u1eef li\u1ec7u ho\u00e0n v\u00e9 tr\u1ea3 v\u1ec1 kh\u00f4ng h\u1ee3p l\u1ec7.", 500);
+  }
+
+  return response;
+}

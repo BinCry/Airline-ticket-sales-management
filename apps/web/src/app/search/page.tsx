@@ -1,14 +1,20 @@
 import Image from "next/image";
+import Link from "next/link";
 
 import type { ApiFlightCard, ApiFlightSearchCriteria, ApiFlightSearchResponse } from "@qlvmb/shared-types";
 
 import { SectionHeading } from "@/components/section-heading";
 import { StatusChip } from "@/components/status-chip";
+import {
+  createBookingHandoffUrl,
+  createHandoffSegmentFromFlight
+} from "@/lib/booking-flow";
 import { hienThiHanhTrinh, hienThiTenGoiGia } from "@/lib/display";
 import {
   FlightSearchApiError,
   chuanHoaTieuChiTimChuyenBay,
-  fetchFlightSearch
+  fetchFlightSearch,
+  taoDuongDanTimChuyenBay
 } from "@/lib/flight-search-api";
 import { formatCurrency } from "@/lib/format";
 
@@ -69,7 +75,81 @@ function hienThiTrangThaiLocGoiGia(criteria: ApiFlightSearchCriteria): string {
   return hienThiTenGoiGia(criteria.fareFamily);
 }
 
-function taoTheKetQua(tieuDe: string, flights: ApiFlightCard[]) {
+function taoDuongDanChonChieuDi(
+  criteria: ApiFlightSearchCriteria,
+  flight: ApiFlightCard
+) {
+  const basePath = taoDuongDanTimChuyenBay(criteria);
+  const [pathname, queryString] = basePath.split("?");
+  const nextSearchParams = new URLSearchParams(queryString ?? "");
+  nextSearchParams.set("selectedOutbound", String(flight.inventoryId));
+  return `${pathname}?${nextSearchParams.toString()}`;
+}
+
+function taoDuongDanDatVe(
+  criteria: ApiFlightSearchCriteria,
+  flights: ApiFlightCard[]
+) {
+  return createBookingHandoffUrl(
+    criteria,
+    flights.map((flight) => createHandoffSegmentFromFlight(flight))
+  );
+}
+
+function taoNutDatVe(
+  criteria: ApiFlightSearchCriteria,
+  tieuDe: string,
+  flight: ApiFlightCard,
+  selectedOutboundFlight: ApiFlightCard | null
+) {
+  if (criteria.tripType === "one_way") {
+    return (
+      <Link href={taoDuongDanDatVe(criteria, [flight])} className="button button-primary">
+        Chọn chuyến này
+      </Link>
+    );
+  }
+
+  if (tieuDe === "Chặng đi") {
+    const isSelected = selectedOutboundFlight?.inventoryId === flight.inventoryId;
+    return (
+      <Link
+        href={taoDuongDanChonChieuDi(criteria, flight)}
+        className={`button ${isSelected ? "button-secondary" : "button-primary"}`}
+      >
+        {isSelected ? "Đã chọn chiều đi" : "Chọn chiều đi"}
+      </Link>
+    );
+  }
+
+  if (!selectedOutboundFlight) {
+    return (
+      <button type="button" className="button button-secondary" disabled>
+        Chọn chiều đi trước
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      href={taoDuongDanDatVe(criteria, [selectedOutboundFlight, flight])}
+      className="button button-primary"
+    >
+      Chọn chiều về
+    </Link>
+  );
+}
+
+function taoTheKetQua(
+  tieuDe: string,
+  flights: ApiFlightCard[],
+  criteria: ApiFlightSearchCriteria,
+  selectedOutboundFlight: ApiFlightCard | null
+) {
+  const selectedNotice = criteria.tripType === "round_trip" && tieuDe === "Chặng về" && selectedOutboundFlight
+    ? `Chiều đi đã chọn: ${selectedOutboundFlight.code} • ${selectedOutboundFlight.departureTime} - ${selectedOutboundFlight.arrivalTime}`
+    : null;
+
   return (
     <div className="stack-list">
       <div className="surface-card result-card">
@@ -77,7 +157,10 @@ function taoTheKetQua(tieuDe: string, flights: ApiFlightCard[]) {
           <div>
             <span className="section-eyebrow">{tieuDe}</span>
             <h3>{flights.length} chuyến bay phù hợp</h3>
-            <p>Danh sách được lấy trực tiếp từ tồn ghế và lịch bay hiện có của backend.</p>
+            <p>
+              {selectedNotice ??
+                "Danh sách được lấy trực tiếp từ tồn ghế và lịch bay hiện có của backend."}
+            </p>
           </div>
         </div>
       </div>
@@ -129,9 +212,7 @@ function taoTheKetQua(tieuDe: string, flights: ApiFlightCard[]) {
                 <span className="assurance-chip">Giữ chỗ 15 phút</span>
                 <span className="assurance-chip">Hiển thị điều kiện đổi hoặc hoàn</span>
               </div>
-              <button type="button" className="button button-primary">
-                Chọn chuyến này
-              </button>
+              {taoNutDatVe(criteria, tieuDe, flight, selectedOutboundFlight)}
             </div>
           </article>
         ))
@@ -140,7 +221,7 @@ function taoTheKetQua(tieuDe: string, flights: ApiFlightCard[]) {
           <div className="result-top">
             <div>
               <span className="section-eyebrow">{tieuDe}</span>
-              <h3>Chưa có chuyến bay phù hợp</h3>
+              <h3>Không tìm thấy chuyến bay phù hợp</h3>
               <p>Hãy thử đổi ngày bay, tuyến hoặc gói giá để xem thêm kết quả.</p>
             </div>
           </div>
@@ -153,6 +234,12 @@ function taoTheKetQua(tieuDe: string, flights: ApiFlightCard[]) {
 export default async function SearchPage({ searchParams }: SearchPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const criteria = chuanHoaTieuChiTimChuyenBay(resolvedSearchParams);
+  const selectedOutboundInventoryId = Number.parseInt(
+    Array.isArray(resolvedSearchParams.selectedOutbound)
+      ? resolvedSearchParams.selectedOutbound[0] ?? ""
+      : resolvedSearchParams.selectedOutbound ?? "",
+    10
+  );
 
   let searchData: ApiFlightSearchResponse | null = null;
   let searchError: string | null = null;
@@ -169,6 +256,10 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const returnFlights = searchData?.returnFlights ?? [];
   const allFlights = searchData?.flights ?? [];
   const fares = searchData?.fares ?? [];
+  const selectedOutboundFlight = Number.isFinite(selectedOutboundInventoryId)
+    ? outboundFlights.find((flight) => flight.inventoryId === selectedOutboundInventoryId) ?? null
+    : null;
+
   const insights = [
     {
       label: "Tuyến đang xem",
@@ -229,6 +320,13 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
             <div className="filter-note">
               Đang áp dụng hạng vé: <strong>{hienThiTrangThaiLocGoiGia(criteria)}</strong>
             </div>
+            {criteria.tripType === "round_trip" ? (
+              <div className="filter-note">
+                {selectedOutboundFlight
+                  ? `Đã chọn chiều đi: ${selectedOutboundFlight.code} • ${selectedOutboundFlight.departureTime}`
+                  : "Hãy chọn chiều đi trước khi chốt chiều về."}
+              </div>
+            ) : null}
           </aside>
 
           <div className="stack-list">
@@ -236,16 +334,18 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
               <article className="surface-card result-card">
                 <div className="result-top">
                   <div>
-                    <span className="section-eyebrow">Không thể tải kết quả</span>
-                    <h3>Cần điều chỉnh lại tiêu chí tìm kiếm</h3>
+                    <span className="section-eyebrow">Không thể tải dữ liệu</span>
+                    <h3>Không thể lấy kết quả tìm chuyến bay</h3>
                     <p>{searchError}</p>
                   </div>
                 </div>
               </article>
             ) : null}
 
-            {taoTheKetQua("Chặng đi", outboundFlights)}
-            {criteria.tripType === "round_trip" ? taoTheKetQua("Chặng về", returnFlights) : null}
+            {taoTheKetQua("Chặng đi", outboundFlights, criteria, selectedOutboundFlight)}
+            {criteria.tripType === "round_trip"
+              ? taoTheKetQua("Chặng về", returnFlights, criteria, selectedOutboundFlight)
+              : null}
           </div>
         </div>
 

@@ -80,11 +80,11 @@ public class AuthService {
   public AuthSessionResponse register(AuthRegisterRequest request, String userAgent, String ipAddress) {
     String normalizedEmail = normalizeEmail(request.email());
     if (userAccountRepository.existsByEmailIgnoreCase(normalizedEmail)) {
-      throw new ConflictException("Email da duoc su dung.");
+      throw new ConflictException("Email đã được sử dụng.");
     }
 
     RoleEntity customerRole = roleRepository.findByCode(RoleCode.CUSTOMER)
-        .orElseThrow(() -> new IllegalStateException("Thieu du lieu role customer."));
+        .orElseThrow(() -> new IllegalStateException("Thiếu dữ liệu vai trò khách hàng."));
     OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
     UserAccountEntity userAccount = UserAccountEntity.register(
         normalizedEmail,
@@ -102,9 +102,9 @@ public class AuthService {
   @Transactional
   public AuthSessionResponse login(AuthLoginRequest request, String userAgent, String ipAddress) {
     UserAccountEntity userAccount = userAccountRepository.findOneWithRolesByEmailIgnoreCase(normalizeEmail(request.email()))
-        .orElseThrow(() -> new UnauthorizedException("Thong tin dang nhap khong chinh xac."));
+        .orElseThrow(() -> new UnauthorizedException("Thông tin đăng nhập không chính xác."));
     if (!passwordEncoder.matches(request.password(), userAccount.getPasswordHash())) {
-      throw new UnauthorizedException("Thong tin dang nhap khong chinh xac.");
+      throw new UnauthorizedException("Thông tin đăng nhập không chính xác.");
     }
     validateUserState(userAccount);
     userAccount.markLoggedIn(OffsetDateTime.now(ZoneOffset.UTC));
@@ -115,19 +115,19 @@ public class AuthService {
   public AuthSessionResponse refresh(AuthRefreshRequest request, String userAgent, String ipAddress) {
     JwtTokenService.RefreshTokenPayload payload = parseRefreshToken(request.refreshToken());
     RefreshSessionEntity refreshSession = refreshSessionRepository.findByTokenKeyAndRevokedAtIsNull(payload.tokenKey())
-        .orElseThrow(() -> new UnauthorizedException("Phien lam moi khong hop le."));
+        .orElseThrow(() -> new UnauthorizedException("Phiên làm mới không hợp lệ."));
     if (!refreshSession.getUserAccount().getId().equals(payload.userId())) {
-      throw new UnauthorizedException("Phien lam moi khong hop le.");
+      throw new UnauthorizedException("Phiên làm mới không hợp lệ.");
     }
 
     OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
     if (refreshSession.getExpiresAt().isBefore(now)) {
       refreshSession.revoke(now);
-      throw new UnauthorizedException("Phien lam moi da het han.");
+      throw new UnauthorizedException("Phiên làm mới đã hết hạn.");
     }
 
     UserAccountEntity userAccount = userAccountRepository.findOneWithRolesById(payload.userId())
-        .orElseThrow(() -> new UnauthorizedException("Tai khoan khong ton tai."));
+        .orElseThrow(() -> new UnauthorizedException("Tài khoản không tồn tại."));
     validateUserState(userAccount);
     refreshSession.revoke(now);
     return createSession(userAccount, userAgent, ipAddress);
@@ -166,7 +166,7 @@ public class AuthService {
 
     return new AuthOtpRequestResponse(
         "accepted",
-        "Neu email ton tai, ma OTP da duoc gui."
+        "Nếu email tồn tại, mã OTP đã được gửi."
     );
   }
 
@@ -177,14 +177,14 @@ public class AuthService {
     if (otpChallenge.getVerifiedAt() == null) {
       otpChallenge.markVerified(OffsetDateTime.now(ZoneOffset.UTC));
     }
-    return new AuthOtpVerifyResponse(true, "OTP hop le.");
+    return new AuthOtpVerifyResponse(true, "Mã OTP hợp lệ.");
   }
 
   @Transactional
   public void resetPassword(AuthResetPasswordRequest request) {
     String normalizedEmail = normalizeEmail(request.email());
     UserAccountEntity userAccount = userAccountRepository.findByEmailIgnoreCase(normalizedEmail)
-        .orElseThrow(() -> new BadRequestException("OTP khong hop le hoac da het han."));
+        .orElseThrow(() -> new BadRequestException("Mã OTP không hợp lệ hoặc đã hết hạn."));
     OtpChallengeEntity otpChallenge = requireActivePasswordResetChallenge(normalizedEmail);
     validateOtpValue(otpChallenge, request.otp());
 
@@ -199,7 +199,7 @@ public class AuthService {
   @Transactional(readOnly = true)
   public MyProfileResponse getMyProfile(AuthenticatedUser authenticatedUser) {
     UserAccountEntity userAccount = userAccountRepository.findOneWithRolesById(authenticatedUser.userId())
-        .orElseThrow(() -> new UnauthorizedException("Khong tim thay thong tin tai khoan."));
+        .orElseThrow(() -> new UnauthorizedException("Không tìm thấy thông tin tài khoản."));
     return new MyProfileResponse(
         userAccount.getId(),
         userAccount.getEmail(),
@@ -242,10 +242,10 @@ public class AuthService {
 
   private void validateUserState(UserAccountEntity userAccount) {
     if (userAccount.isLocked()) {
-      throw new UnauthorizedException("Tai khoan hien dang bi khoa.");
+      throw new UnauthorizedException("Tài khoản hiện đang bị khóa.");
     }
     if (!"active".equalsIgnoreCase(userAccount.getStatus())) {
-      throw new UnauthorizedException("Tai khoan hien chua san sang dang nhap.");
+      throw new UnauthorizedException("Tài khoản hiện chưa sẵn sàng đăng nhập.");
     }
   }
 
@@ -253,7 +253,7 @@ public class AuthService {
     try {
       return jwtTokenService.parseRefreshToken(refreshToken);
     } catch (JwtException exception) {
-      throw new UnauthorizedException("Refresh token khong hop le.");
+      throw new UnauthorizedException("Refresh token không hợp lệ.");
     }
   }
 
@@ -279,13 +279,13 @@ public class AuthService {
             normalizeEmail(email),
             OtpPurposeCode.FORGOT_PASSWORD
         )
-        .orElseThrow(() -> new BadRequestException("OTP khong hop le hoac da het han."));
+        .orElseThrow(() -> new BadRequestException("Mã OTP không hợp lệ hoặc đã hết hạn."));
     OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
     if (otpChallenge.isConsumed() || otpChallenge.isExpired(now)) {
       if (!otpChallenge.isConsumed()) {
         otpChallenge.consume(now);
       }
-      throw new BadRequestException("OTP khong hop le hoac da het han.");
+      throw new BadRequestException("Mã OTP không hợp lệ hoặc đã hết hạn.");
     }
     return otpChallenge;
   }
@@ -296,7 +296,7 @@ public class AuthService {
       if (otpChallenge.getAttemptCount() >= otpMaxAttempts) {
         otpChallenge.consume(OffsetDateTime.now(ZoneOffset.UTC));
       }
-      throw new BadRequestException("OTP khong hop le hoac da het han.");
+      throw new BadRequestException("Mã OTP không hợp lệ hoặc đã hết hạn.");
     }
   }
 
@@ -312,7 +312,7 @@ public class AuthService {
   private String normalizeDisplayName(String displayName) {
     String normalizedDisplayName = displayName.trim();
     if (normalizedDisplayName.isBlank()) {
-      throw new BadRequestException("Ten hien thi khong duoc de trong.");
+      throw new BadRequestException("Tên hiển thị không được để trống.");
     }
     return normalizedDisplayName;
   }

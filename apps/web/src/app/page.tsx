@@ -16,9 +16,8 @@ import {
   promotions,
   quickServices,
   supportChannels
-} from "@/lib/mock-data";
+} from "@/lib/public-content";
 import { getLatestTravelArticles } from "@/lib/newsdata";
-import { formatCurrency } from "@/lib/format";
 
 const promotionPhotos = [
   { src: "/images/summer-promo.jpg", alt: "Hình minh hoạ chiến dịch mùa hè" },
@@ -99,7 +98,7 @@ const featuredDestinations = [
     city: "Nha Trang",
     displayCity: "Nha Trang",
     airport: "Cam Ranh",
-    priceFrom: 1490000,
+    tagline: "Thích hợp nghỉ dưỡng biển và hành trình ngắn ngày",
     highlights: ["Biển xanh trung tâm", "Combo nghỉ dưỡng", "Đưa đón sân bay thuận tiện"]
   },
   {
@@ -107,7 +106,7 @@ const featuredDestinations = [
     city: "Huế",
     displayCity: "Huế",
     airport: "Phú Bài",
-    priceFrom: 1290000,
+    tagline: "Phù hợp khám phá di sản và chuyến đi cuối tuần",
     highlights: ["Di sản cố đô", "Lịch trình cuối tuần", "Gợi ý tham quan nội thành"]
   }
 ];
@@ -236,7 +235,7 @@ export default async function HomePage() {
           <SectionHeading
             eyebrow="Điểm đến & chiến dịch"
             title="Khám phá các đường bay nội địa nổi bật cho kỳ nghỉ, công tác và du lịch ngắn ngày"
-            description="Mỗi điểm đến đi kèm mức giá khởi điểm, sân bay khai thác và các gợi ý nổi bật để hành khách có thêm căn cứ trước khi chọn hành trình."
+            description="Mỗi điểm đến đi kèm sân bay khai thác, định hướng hành trình và các gợi ý nổi bật để hành khách có thêm căn cứ trước khi chọn chuyến đi."
           />
           <div className="destination-editorial-grid home-destination-grid">
             {featuredDestinations.map((destination, index) => (
@@ -253,7 +252,7 @@ export default async function HomePage() {
                     <span className="pill">Điểm đến nổi bật</span>
                   </div>
                   <div className="destination-bottom home-destination-bottom">
-                    <h3>{formatCurrency(destination.priceFrom)}</h3>
+                    <h3>{destination.tagline}</h3>
                     <ul className="list-clean home-destination-list">
                       {destination.highlights.map((highlight) => (
                         <li key={highlight}>{highlight}</li>

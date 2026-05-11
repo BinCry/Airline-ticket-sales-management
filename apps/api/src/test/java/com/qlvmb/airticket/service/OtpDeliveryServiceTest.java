@@ -18,11 +18,7 @@ class OtpDeliveryServiceTest {
   @Test
   void sendForgotPasswordOtp_shouldSendEmailWhenMailEnabled() {
     JavaMailSender mailSender = mock(JavaMailSender.class);
-    OtpDeliveryService otpDeliveryService = new OtpDeliveryService(
-        mailSender,
-        true,
-        FROM_EMAIL
-    );
+    OtpDeliveryService otpDeliveryService = new OtpDeliveryService(mailSender, true, FROM_EMAIL);
 
     otpDeliveryService.sendForgotPasswordOtp("khach@example.com", "123456");
 
@@ -39,11 +35,7 @@ class OtpDeliveryServiceTest {
   @Test
   void sendForgotPasswordOtp_shouldNotSendEmailWhenMailDisabled() {
     JavaMailSender mailSender = mock(JavaMailSender.class);
-    OtpDeliveryService otpDeliveryService = new OtpDeliveryService(
-        mailSender,
-        false,
-        FROM_EMAIL
-    );
+    OtpDeliveryService otpDeliveryService = new OtpDeliveryService(mailSender, false, FROM_EMAIL);
 
     otpDeliveryService.sendForgotPasswordOtp("khach@example.com", "123456");
 
@@ -52,14 +44,10 @@ class OtpDeliveryServiceTest {
 
   @Test
   void sendForgotPasswordOtp_shouldFailWhenMailEnabledButSenderMissing() {
-    OtpDeliveryService otpDeliveryService = new OtpDeliveryService(
-        null,
-        true,
-        FROM_EMAIL
-    );
+    OtpDeliveryService otpDeliveryService = new OtpDeliveryService(null, true, FROM_EMAIL);
 
     assertThatThrownBy(() -> otpDeliveryService.sendForgotPasswordOtp("khach@example.com", "123456"))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessage("Chua cau hinh dich vu gui email.");
+        .hasMessage("Chưa cấu hình dịch vụ gửi email.");
   }
 }

@@ -1,6 +1,12 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import {
+  canAccessBackofficeModuleByRoles,
+  hasAnyBackofficeAccess,
+  isBackofficeModuleKey,
+  sanitizeUserRoles
+} from "@/lib/access-control";
 import { parseJwtPayload, readJwtExpirationSeconds, readJwtStringArray } from "@/lib/jwt";
 
 const ACCESS_TOKEN_COOKIE = "qlvmb.access_token";
@@ -10,6 +16,12 @@ function buildLoginRedirect(request: NextRequest): NextResponse {
   const currentPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
   loginUrl.searchParams.set("redirectTo", currentPath);
   return NextResponse.redirect(loginUrl);
+}
+
+function buildHomeRedirect(request: NextRequest, noticeCode: string): NextResponse {
+  const homeUrl = new URL("/", request.url);
+  homeUrl.searchParams.set("thong-bao", noticeCode);
+  return NextResponse.redirect(homeUrl);
 }
 
 function sanitizeRedirectTarget(value: string | null): string | null {
@@ -39,7 +51,7 @@ export function middleware(request: NextRequest) {
   }
 
   if (!token) {
-    return buildLoginRedirect(request);
+    return isAuthPage ? NextResponse.next() : buildLoginRedirect(request);
   }
 
   let decodedToken = "";
@@ -77,13 +89,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const permissions = readJwtStringArray(payload, "permissions");
-  const hasAnyBackofficePermission = permissions.some((permission) =>
-    permission.startsWith("backoffice.")
-  );
+  const roles = sanitizeUserRoles(readJwtStringArray(payload, "roles"));
 
-  if (!hasAnyBackofficePermission) {
-    return NextResponse.redirect(new URL("/", request.url));
+  if (!hasAnyBackofficeAccess(roles)) {
+    return buildHomeRedirect(request, "khong-co-quyen");
   }
 
   const moduleKey = pathname.split("/")[2]?.trim() ?? "";
@@ -91,16 +100,15 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (permissions.includes("backoffice.admin")) {
+  if (!isBackofficeModuleKey(moduleKey)) {
     return NextResponse.next();
   }
 
-  const requiredPermission = `backoffice.${moduleKey}`;
-  if (permissions.includes(requiredPermission)) {
+  if (canAccessBackofficeModuleByRoles(roles, moduleKey)) {
     return NextResponse.next();
   }
 
-  return NextResponse.redirect(new URL("/backoffice", request.url));
+  return buildHomeRedirect(request, "khong-co-quyen");
 }
 
 export const config = {

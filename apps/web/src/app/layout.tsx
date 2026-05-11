@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { ChatbotWidget } from "@/components/chatbot-widget";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { ToastProvider } from "@/components/toast-provider";
 
 import "./globals.css";
 
@@ -38,6 +40,9 @@ export default function RootLayout({
     <html lang="vi" suppressHydrationWarning>
       <body>
         <div className="site-shell">
+          <Suspense>
+            <ToastProvider />
+          </Suspense>
           <SiteHeader />
           <main className="page-main">{children}</main>
           <SiteFooter />

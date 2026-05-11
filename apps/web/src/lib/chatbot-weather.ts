@@ -266,7 +266,7 @@ export async function getWeatherSnapshot(question: string) {
 
     if (!response.ok || !data) {
       console.error(
-        `[chatbot-weather] Khong lay duoc thoi tiet cho ${location.city}: ${response.status} ${data?.message ?? ""}`.trim()
+        `[chatbot-weather] Không lấy được thời tiết cho ${location.city}: ${response.status} ${data?.message ?? ""}`.trim()
       );
       return null;
     }
@@ -288,7 +288,7 @@ export async function getWeatherSnapshot(question: string) {
       windSpeed: roundWeatherValue(data.wind?.speed ?? 0)
     } satisfies WeatherSnapshot;
   } catch (error) {
-    console.error("[chatbot-weather] Loi khi goi OpenWeather.", error);
+    console.error("[chatbot-weather] Lỗi khi gọi OpenWeather.", error);
     return null;
   }
 }

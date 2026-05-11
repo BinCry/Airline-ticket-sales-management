@@ -6,7 +6,7 @@ import {
   isWeatherQuestion,
   type WeatherSnapshot
 } from "@/lib/chatbot-weather";
-import { destinations } from "@/lib/mock-data";
+import { destinations } from "@/lib/public-content";
 import { getGeminiApiKey, getGeminiModel } from "@/lib/server-env";
 
 import type { ChatbotAction, ChatbotApiMessage } from "@/lib/chatbot-shared";
@@ -90,7 +90,7 @@ function formatCurrentDate() {
 function buildGroundingContext() {
   return destinations
     .map((destination) => {
-      return `- ${destination.city} (${destination.airport}), giá tham khảo từ ${destination.priceFrom.toLocaleString("vi-VN")} VND, điểm nhấn: ${destination.highlights.join(", ")}`;
+      return `- ${destination.city} (${destination.airport}), định hướng: ${destination.tagline}, điểm nhấn: ${destination.highlights.join(", ")}`;
     })
     .join("\n");
 }
@@ -204,20 +204,20 @@ function buildSystemInstruction(
     : "";
 
   return (
-    `Ban la tro ly goi y du lich bang tieng Viet cho website Vietnam Airlines.\n` +
-    `Hom nay la ${formatCurrentDate()}.\n` +
-    `Hay tra loi gon, thuc te va de doc.\n` +
-    `Voi yeu cau chi hoi thoi tiet hien tai, co the tra loi ngan hon 120 tu.\n` +
-    `Neu nguoi dung da dua du thong tin nhu diem di, thoi luong hoac nhom khach, khong hoi lai mo dau.\n` +
-    `Neu nguoi dung chi hoi thoi tiet hien tai cua mot dia diem, hay tra loi truc tiep ve thoi tiet truoc, sau do chi goi y them 1 cau ngan neu thuc su can.\n` +
-    `Voi yeu cau goi y du lich, hay goi y dung 3 phuong an phu hop nhat.\n` +
-    `Moi phuong an chi 1 dong theo mau: Ten diem den - ly do phu hop - chi phi tuong doi - luu y ngan.\n` +
-    `Neu thong tin con thieu, chi hoi them toi da 1 cau ngan o cuoi cau tra loi.\n` +
-    `Khong bia du lieu chuyen bay thoi gian thuc, khong khang dinh gia ve dang ban.\n` +
-    `Neu nguoi dung hoi ve thoi tiet hien tai, chi duoc tra loi khi duoc cap du lieu thoi tiet da xac thuc; neu khong co du lieu thi phai noi ro chua xac thuc duoc.\n` +
-    `Khong dung markdown phuc tap hoac doan qua dai.\n` +
-    `Ket thuc bang 1 cau ngan goi y buoc tiep theo nhu doc blog hoac tim chuyen bay.\n\n` +
-    `Mot so diem den va du lieu tham khao tren website:\n${groundedDestinations}` +
+    `Bạn là trợ lý gợi ý du lịch bằng tiếng Việt cho website Vietnam Airlines.\n` +
+    `Hôm nay là ${formatCurrentDate()}.\n` +
+    `Hãy trả lời gọn, thực tế và dễ đọc.\n` +
+    `Với yêu cầu chỉ hỏi thời tiết hiện tại, có thể trả lời ngắn hơn 120 từ.\n` +
+    `Nếu người dùng đã đưa đủ thông tin như điểm đi, thời lượng hoặc nhóm khách, không hỏi lại mở đầu.\n` +
+    `Nếu người dùng chỉ hỏi thời tiết hiện tại của một địa điểm, hãy trả lời trực tiếp về thời tiết trước, sau đó chỉ gợi ý thêm 1 câu ngắn nếu thực sự cần.\n` +
+    `Với yêu cầu gợi ý du lịch, hãy gợi ý đúng 3 phương án phù hợp nhất.\n` +
+    `Mỗi phương án chỉ 1 dòng theo mẫu: Tên điểm đến - lý do phù hợp - chi phí tương đối - lưu ý ngắn.\n` +
+    `Nếu thông tin còn thiếu, chỉ hỏi thêm tối đa 1 câu ngắn ở cuối câu trả lời.\n` +
+    `Không bịa dữ liệu chuyến bay thời gian thực, không khẳng định giá vé đang bán.\n` +
+    `Nếu người dùng hỏi về thời tiết hiện tại, chỉ được trả lời khi được cấp dữ liệu thời tiết đã xác thực; nếu không có dữ liệu thì phải nói rõ chưa xác thực được.\n` +
+    `Không dùng markdown phức tạp hoặc đoạn quá dài.\n` +
+    `Kết thúc bằng 1 câu ngắn gợi ý bước tiếp theo như đọc blog hoặc tìm chuyến bay.\n\n` +
+    `Một số điểm đến và dữ liệu tham khảo trên website:\n${groundedDestinations}` +
     weatherPromptContext
   );
 }
@@ -290,7 +290,7 @@ export async function buildTravelReply(
       if (!response.ok) {
         const errorMessage = await extractGeminiErrorMessage(response);
         console.error(
-          `[chatbot-travel] Goi ${model} that bai voi ma ${response.status}${errorMessage ? `: ${errorMessage}` : "."}`
+          `[chatbot-travel] Gọi ${model} thất bại với mã ${response.status}${errorMessage ? `: ${errorMessage}` : "."}`
         );
         continue;
       }
@@ -299,7 +299,7 @@ export async function buildTravelReply(
       const reply = extractGeminiText(data);
 
       if (!reply) {
-        console.error(`[chatbot-travel] ${model} khong tra noi dung hop le.`);
+        console.error(`[chatbot-travel] ${model} không trả nội dung hợp lệ.`);
         continue;
       }
 
@@ -308,7 +308,7 @@ export async function buildTravelReply(
         reply
       };
     } catch (error) {
-      console.error(`[chatbot-travel] Loi khi goi ${model}.`, error);
+      console.error(`[chatbot-travel] Lỗi khi gọi ${model}.`, error);
     }
   }
 
