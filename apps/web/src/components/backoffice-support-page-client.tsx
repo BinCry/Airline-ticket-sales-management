@@ -159,10 +159,12 @@ export function BackofficeSupportPageClient() {
                         <td data-label="Booking">
                           <div className="finance-cell-stack">
                             <strong>{notification.bookingCode ?? "Không gắn booking"}</strong>
-                            <span>{notification.type}</span>
+                            <span className="support-notification-type">{notification.type}</span>
                           </div>
                         </td>
-                        <td data-label="Người nhận">{notification.recipientEmail}</td>
+                        <td data-label="Người nhận">
+                          <span className="support-recipient-email">{notification.recipientEmail}</span>
+                        </td>
                         <td data-label="Tiêu đề">
                           <div className="finance-cell-stack">
                             <strong>{notification.subject}</strong>

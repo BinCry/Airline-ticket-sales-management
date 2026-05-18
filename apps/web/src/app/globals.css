@@ -2893,10 +2893,14 @@ thead th {
 .booking-summary-card h3,
 .result-card h3,
 .blog-feature-card h3,
-.blog-hero-panel h3,
+.blog-hero-panel h3 {
+  overflow-wrap: anywhere;
+}
+
 td,
 th {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .nav-link,
@@ -4777,6 +4781,22 @@ th {
 .finance-cell-stack small,
 .finance-muted-action {
   color: var(--muted);
+}
+
+.support-notification-type {
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.support-recipient-email {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .finance-action-row {
