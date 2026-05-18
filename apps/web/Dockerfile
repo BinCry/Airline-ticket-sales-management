@@ -19,6 +19,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
+COPY tsconfig.base.json ./tsconfig.base.json
 COPY apps/web ./apps/web
 COPY packages/shared-types ./packages/shared-types
 
