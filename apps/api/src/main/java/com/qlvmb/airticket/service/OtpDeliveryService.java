@@ -44,7 +44,7 @@ public class OtpDeliveryService {
     SimpleMailMessage message = new SimpleMailMessage();
     message.setTo(email);
     message.setFrom(fromEmail);
-    message.setSubject("Mã OTP đặt lại mật khẩu");
+    message.setSubject("Mã OTP đặt lại mật khẩu | Vietnam Airlines");
     message.setText(buildForgotPasswordMessage(otp));
     mailSender.send(message);
     LOGGER.info("Đã gửi OTP đặt lại mật khẩu đến {}", maskEmail(email));
@@ -67,7 +67,7 @@ public class OtpDeliveryService {
     SimpleMailMessage message = new SimpleMailMessage();
     message.setTo(email);
     message.setFrom(fromEmail);
-    message.setSubject("Mã OTP tra cứu đặt chỗ " + bookingCode);
+    message.setSubject("Mã OTP tra cứu đặt chỗ " + bookingCode + " | Vietnam Airlines");
     message.setText(buildBookingLookupMessage(otp, bookingCode));
     mailSender.send(message);
     LOGGER.info("Đã gửi OTP tra cứu booking {} đến {}", bookingCode, maskEmail(email));
@@ -83,19 +83,35 @@ public class OtpDeliveryService {
 
   private String buildForgotPasswordMessage(String otp) {
     return """
-        Mã OTP đặt lại mật khẩu của bạn là: %s
+        Xin chào,
 
-        Mã này có hiệu lực trong 5 phút.
-        Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.
+        Chúng tôi đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản Vietnam Airlines của bạn.
+
+        Mã OTP của bạn là: %s
+
+        Mã có hiệu lực trong 5 phút. Để đảm bảo an toàn, vui lòng không chia sẻ mã này với bất kỳ ai.
+
+        Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này.
+
+        Trân trọng,
+        Vietnam Airlines
         """.formatted(otp);
   }
 
   private String buildBookingLookupMessage(String otp, String bookingCode) {
     return """
-        Mã OTP tra cứu cho đặt chỗ %s là: %s
+        Xin chào,
 
-        Mã này có hiệu lực trong 5 phút.
-        Nếu bạn không yêu cầu tra cứu đặt chỗ, vui lòng bỏ qua email này.
+        Chúng tôi đã nhận được yêu cầu xác minh để tra cứu thông tin đặt chỗ %s.
+
+        Mã OTP của bạn là: %s
+
+        Mã có hiệu lực trong 5 phút. Để bảo vệ thông tin hành trình, vui lòng không chia sẻ mã này với bất kỳ ai.
+
+        Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này.
+
+        Trân trọng,
+        Vietnam Airlines
         """.formatted(bookingCode, otp);
   }
 }
