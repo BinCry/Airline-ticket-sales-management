@@ -171,29 +171,3 @@ jobs:
           fi
           git merge origin/main --no-edit
           git push origin deploy
-
-  deploy-coolify:
-    name: deploy-coolify
-    runs-on: ubuntu-latest
-    needs:
-      - test-api
-      - test-web
-      - verify-images
-      - validate-production-config
-      - sync-deploy-branch
-
-    steps:
-      - name: Kiểm tra webhook Coolify
-        env:
-          COOLIFY_PRODUCTION_WEBHOOK_URL: ${{ secrets.COOLIFY_PRODUCTION_WEBHOOK_URL }}
-        run: |
-          if [ -z "$COOLIFY_PRODUCTION_WEBHOOK_URL" ]; then
-            echo "::error::Thiếu secret COOLIFY_PRODUCTION_WEBHOOK_URL để trigger redeploy production."
-            exit 1
-          fi
-
-      - name: Trigger redeploy production
-        env:
-          COOLIFY_PRODUCTION_WEBHOOK_URL: ${{ secrets.COOLIFY_PRODUCTION_WEBHOOK_URL }}
-        run: |
-          curl -fsS -X POST "$COOLIFY_PRODUCTION_WEBHOOK_URL"
