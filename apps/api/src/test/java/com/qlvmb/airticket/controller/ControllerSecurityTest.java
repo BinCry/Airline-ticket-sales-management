@@ -1011,6 +1011,12 @@ class ControllerSecurityTest {
   }
 
   @Test
+  void getAvatarUpload_shouldNotRequireAuthentication() throws Exception {
+    mockMvc.perform(get("/uploads/avatars/khong-ton-tai.jpg"))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
   void register_shouldReturnJsonBadRequestForInvalidPayload() throws Exception {
     mockMvc.perform(post("/api/auth/register")
             .contentType(APPLICATION_JSON)

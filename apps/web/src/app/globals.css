@@ -4009,7 +4009,7 @@ th {
     text-align: center;
   }
 
-  .main-nav .nav-link:last-child {
+  .main-nav .nav-link:last-child:nth-child(odd) {
     grid-column: 1 / -1;
   }
 

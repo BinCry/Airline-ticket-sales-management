@@ -50,6 +50,7 @@ export const utilityLinks: SiteLink[] = [
 ];
 
 export const mainNavigation: SiteLink[] = [
+  { label: "Trang chủ", href: "/" },
   { label: "Tìm chuyến bay", href: "/search" },
   { label: "Đặt vé", href: "/search#dat-ve" },
   { label: "Quản lý đặt chỗ", href: "/manage-booking" },

@@ -67,6 +67,7 @@ public class SecurityConfig {
         .authorizeHttpRequests(authorize -> authorize
             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
             .requestMatchers("/error").permitAll()
+            .requestMatchers(HttpMethod.GET, "/uploads/avatars/**").permitAll()
             .requestMatchers("/api/auth/**", "/api/public/**").permitAll()
             .requestMatchers(HttpMethod.GET, "/api/meta/health").permitAll()
             .requestMatchers(
