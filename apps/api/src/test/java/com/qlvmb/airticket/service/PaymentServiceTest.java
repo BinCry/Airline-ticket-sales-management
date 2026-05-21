@@ -236,6 +236,26 @@ class PaymentServiceTest {
   }
 
   @Test
+  void createPaymentSession_shouldReturnExistingSessionWhenBookingAlreadyPaid() {
+    BookingEntity booking = heldBooking("A6C2PA");
+    PaymentTransactionEntity transaction = pendingTransaction(booking, "SEPAY-123456789999");
+    OffsetDateTime paidAt = OffsetDateTime.now();
+    transaction.markPaid(123460L, "FT26142420400038", "{}", paidAt);
+    booking.markTicketed("FT26142420400038", paidAt);
+
+    when(bookingService.findBookingForPayment("A6C2PA")).thenReturn(booking);
+    when(bookingService.mapPaymentStatus(BookingEntity.PAYMENT_STATUS_PAID)).thenReturn("paid");
+    when(paymentTransactionRepository.findByBookingId(any())).thenReturn(Optional.of(transaction));
+
+    PaymentSessionResponse response = paymentService.createPaymentSession("A6C2PA");
+
+    assertThat(response.paymentStatus()).isEqualTo("paid");
+    assertThat(response.referenceCode()).isEqualTo("SEPAY-123456789999");
+    assertThat(response.bankName()).isEqualTo("MB Bank");
+    assertThat(response.accountNumber()).isEqualTo("0985512831");
+  }
+
+  @Test
   void handlePaymentCallback_shouldTicketBookingAndCreateTicket() {
     BookingEntity booking = heldBooking("A6C2P1");
     when(bookingService.findBookingForPayment("A6C2P1")).thenReturn(booking);

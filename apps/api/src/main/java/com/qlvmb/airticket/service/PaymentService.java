@@ -94,12 +94,17 @@ public class PaymentService {
   public PaymentSessionResponse createPaymentSession(String bookingCode) {
     BookingEntity booking = bookingService.findBookingForPayment(bookingCode);
     OffsetDateTime currentTime = OffsetDateTime.now();
+    PaymentTransactionEntity transaction = paymentTransactionRepository.findByBookingId(booking.getId()).orElse(null);
+
+    if (booking.isTicketed()
+        && BookingEntity.PAYMENT_STATUS_PAID.equals(booking.getPaymentStatus())
+        && transaction != null) {
+      return mapPaymentSession(booking, transaction);
+    }
 
     if (!booking.isHold()) {
       throw new BadRequestException(bookingService.getWaitingPaymentMessage());
     }
-
-    PaymentTransactionEntity transaction = paymentTransactionRepository.findByBookingId(booking.getId()).orElse(null);
     if (tryReconcilePendingTransaction(booking, transaction, currentTime)) {
       LOGGER.info("Booking {} đã được đối soát lại thành công qua API SePay.", bookingCode);
       return mapPaymentSession(booking, transaction);
