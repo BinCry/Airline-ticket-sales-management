@@ -25,7 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class NotificationOutboxService {
 
   private static final String TICKET_EMAIL_SUBJECT_PREFIX = "Vé điện tử cho mã đặt chỗ ";
-  private static final String FLIGHT_CANCELLATION_SUBJECT_PREFIX = "Thông báo hủy chuyến cho mã đặt chỗ ";
+  private static final String TICKET_EMAIL_SUBJECT_SUFFIX = " | Vietnam Airlines";
+  private static final String FLIGHT_CANCELLATION_SUBJECT_PREFIX = "Cập nhật hành trình cho mã đặt chỗ ";
+  private static final String FLIGHT_CANCELLATION_SUBJECT_SUFFIX = " | Vietnam Airlines";
   private static final String RETRY_NOT_FOUND_MESSAGE = "Không tìm thấy email cần gửi lại.";
   private static final String MAIL_DISABLED_MESSAGE = "Chưa bật cấu hình gửi email.";
   private static final String MAIL_SENDER_NOT_READY_MESSAGE = "Chưa cấu hình dịch vụ gửi email.";
@@ -59,7 +61,7 @@ public class NotificationOutboxService {
     NotificationOutboxEntity outbox = NotificationOutboxEntity.createTicketEmail(
         booking.getBookingCode(),
         booking.getContact().getEmail(),
-        TICKET_EMAIL_SUBJECT_PREFIX + booking.getBookingCode(),
+        TICKET_EMAIL_SUBJECT_PREFIX + booking.getBookingCode() + TICKET_EMAIL_SUBJECT_SUFFIX,
         buildTicketEmailBody(booking),
         currentTime
     );
@@ -78,7 +80,9 @@ public class NotificationOutboxService {
     NotificationOutboxEntity outbox = NotificationOutboxEntity.createFlightCancellationEmail(
         booking.getBookingCode(),
         booking.getContact().getEmail(),
-        FLIGHT_CANCELLATION_SUBJECT_PREFIX + booking.getBookingCode(),
+        FLIGHT_CANCELLATION_SUBJECT_PREFIX
+            + booking.getBookingCode()
+            + FLIGHT_CANCELLATION_SUBJECT_SUFFIX,
         buildFlightCancellationEmailBody(booking, flight, cancellationNote),
         currentTime
     );
@@ -154,12 +158,12 @@ public class NotificationOutboxService {
     return """
         Xin chào %s,
 
-        Đặt chỗ %s đã thanh toán thành công và vé điện tử đã được phát hành.
+        Chúng tôi xác nhận mã đặt chỗ %s đã thanh toán thành công và vé điện tử của bạn đã được phát hành.
 
-        Hành khách:
+        Thông tin hành khách:
         %s
 
-        Chặng bay:
+        Thông tin hành trình:
         %s
 
         Số vé:
@@ -168,7 +172,10 @@ public class NotificationOutboxService {
         Tổng tiền: %s
         Trạng thái thanh toán: Đã thanh toán
 
-        Vui lòng giữ email này để làm thông tin tham chiếu khi cần hỗ trợ.
+        Vui lòng lưu lại email này để xuất trình khi cần tra cứu, hỗ trợ hoặc đối chiếu thông tin hành trình.
+
+        Trân trọng,
+        Vietnam Airlines
         """.formatted(
         booking.getContact().getFullName(),
         booking.getBookingCode(),
@@ -187,7 +194,7 @@ public class NotificationOutboxService {
     return """
         Xin chào %s,
 
-        Chuyến bay %s trong mã đặt chỗ %s đã được hủy bởi bộ phận vận hành.
+        Chúng tôi rất tiếc phải thông báo chuyến bay %s trong mã đặt chỗ %s đã được bộ phận vận hành hủy.
 
         Trạng thái hiện tại:
         - Đặt chỗ: Đã hủy
@@ -201,7 +208,10 @@ public class NotificationOutboxService {
         Ghi chú vận hành:
         %s
 
-        Vui lòng liên hệ bộ phận hỗ trợ để được hướng dẫn đổi hành trình hoặc xử lý tiếp theo.
+        Vui lòng liên hệ bộ phận hỗ trợ để được hướng dẫn đổi hành trình hoặc phương án hỗ trợ tiếp theo.
+
+        Trân trọng,
+        Vietnam Airlines
         """.formatted(
         booking.getContact().getFullName(),
         flight.getCode(),
