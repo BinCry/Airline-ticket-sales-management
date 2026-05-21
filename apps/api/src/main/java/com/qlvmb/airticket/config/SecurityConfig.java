@@ -85,10 +85,11 @@ public class SecurityConfig {
                 "/api/bookings/lookup/verify-otp",
                 "/api/bookings/*/payments/session",
                 "/api/bookings/*/refund-request",
-                "/api/payments/callback",
                 "/api/payments/webhooks/sepay",
                 "/api/check-in/complete"
             ).permitAll()
+            .requestMatchers(HttpMethod.POST, "/api/payments/callback")
+            .hasAuthority(PermissionCode.BACKOFFICE_SALES)
             .requestMatchers("/api/backoffice/operations/**")
             .hasAuthority(PermissionCode.BACKOFFICE_OPERATIONS)
             .requestMatchers("/api/admin/**")

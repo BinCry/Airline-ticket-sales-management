@@ -50,6 +50,51 @@ function formatVoucherStatus(status: string) {
   return status;
 }
 
+function resolveSePayQrBankCode(bankName: string | null | undefined) {
+  if (!bankName) {
+    return null;
+  }
+
+  const normalized = bankName.replaceAll(/[^\p{L}\p{N}]+/gu, "").toUpperCase();
+  if (normalized === "BIDV") {
+    return "BIDV";
+  }
+  if (normalized === "MB" || normalized === "MBB" || normalized === "MBBANK") {
+    return "MBBank";
+  }
+
+  return bankName;
+}
+
+function resolveFallbackQrCodeUrl(session: ApiPaymentSessionResponse | null) {
+  if (!session) {
+    return null;
+  }
+
+  if (session.qrCodeUrl) {
+    return session.qrCodeUrl;
+  }
+
+  if (!session.bankName || !session.accountNumber || !session.referenceCode || session.amount <= 0) {
+    return null;
+  }
+
+  const qrBankCode = resolveSePayQrBankCode(session.bankName);
+  if (!qrBankCode) {
+    return null;
+  }
+
+  const query = new URLSearchParams({
+    acc: session.accountNumber,
+    amount: String(session.amount),
+    bank: qrBankCode,
+    des: session.referenceCode,
+    template: "compact"
+  });
+
+  return `https://qr.sepay.vn/img?${query.toString()}`;
+}
+
 export default function BookingCheckoutPage() {
   const params = useParams<{ pnr: string }>();
   const router = useRouter();
@@ -171,6 +216,7 @@ export default function BookingCheckoutPage() {
       voucher.status === "AVAILABLE" ||
       (voucher.status === "RESERVED" && voucher.bookingCode === bookingCode)
   );
+  const paymentQrCodeUrl = resolveFallbackQrCodeUrl(session);
 
   async function handleLocalPaymentConfirmation() {
     if (!bookingCode || isPaying || session?.sessionMode !== "local") {
@@ -372,10 +418,10 @@ export default function BookingCheckoutPage() {
                       </p>
                     </div>
                   ) : null}
-                  {session.qrCodeUrl ? (
+                  {paymentQrCodeUrl ? (
                     <div className="booking-payment-qr">
                       <img
-                        src={session.qrCodeUrl}
+                        src={paymentQrCodeUrl}
                         alt={`Mã QR thanh toán cho ${session.referenceCode}`}
                       />
                     </div>
@@ -389,9 +435,9 @@ export default function BookingCheckoutPage() {
                           : "SePay chuyển khoản nhanh"}
                       </strong>
                     </div>
-                    {session.sessionMode === "live" && session.paymentUrl ? (
+                    {paymentQrCodeUrl ? (
                       <a
-                        href={session.paymentUrl}
+                        href={paymentQrCodeUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="button button-primary"
@@ -402,8 +448,7 @@ export default function BookingCheckoutPage() {
                       <button
                         type="button"
                         className="button button-primary"
-                        onClick={handleLocalPaymentConfirmation}
-                        disabled={isPaying}
+                        disabled
                       >
                         {isPaying ? "Đang xác nhận..." : "Tôi đã hoàn tất thanh toán"}
                       </button>

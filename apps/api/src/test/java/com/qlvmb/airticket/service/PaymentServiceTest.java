@@ -111,6 +111,36 @@ class PaymentServiceTest {
   }
 
   @Test
+  void createPaymentSession_shouldReturnQrSessionWhenQrBaseUrlBlank() {
+    PaymentService service = new PaymentService(
+        bookingService,
+        memberVoucherService,
+        notificationOutboxService,
+        paymentTransactionRepository,
+        "",
+        "",
+        "",
+        "MB Bank",
+        "0985512831",
+        "PHAM MINH QUAN",
+        900,
+        "https://userapi.sepay.vn/v2",
+        ""
+    );
+    BookingEntity booking = heldBooking("A6C2P9");
+    when(bookingService.findBookingForPayment("A6C2P9")).thenReturn(booking);
+    when(bookingService.mapPaymentStatus(BookingEntity.PAYMENT_STATUS_PENDING)).thenReturn("pending");
+    when(paymentTransactionRepository.findByBookingId(any())).thenReturn(Optional.empty());
+    when(paymentTransactionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    when(bookingService.generatePaymentReference()).thenReturn("SEPAY-000000000009");
+
+    PaymentSessionResponse response = service.createPaymentSession("A6C2P9");
+
+    assertThat(response.sessionMode()).isEqualTo("live");
+    assertThat(response.qrCodeUrl()).contains("qr.sepay.vn/img");
+  }
+
+  @Test
   void createPaymentSession_shouldReturnLocalSePaySessionWhenBankAccountIdMissing() {
     PaymentService service = new PaymentService(
         bookingService,

@@ -38,6 +38,7 @@ public class PaymentService {
   private static final String SEPAY_ORDER_BANK_BIDV = "BIDV";
   private static final String SEPAY_BANK_SLUG_BIDV = "bidv";
   private static final String SEPAY_BANK_SLUG_MBB = "mbb";
+  private static final String SEPAY_DEFAULT_QR_BASE_URL = "https://qr.sepay.vn/img";
 
   private final BookingService bookingService;
   private final MemberVoucherService memberVoucherService;
@@ -82,7 +83,10 @@ public class PaymentService {
     this.sePayAccountNumber = trimToNull(sePayAccountNumber);
     this.sePayAccountHolderName = trimToNull(sePayAccountHolderName);
     this.sePayOrderDurationSeconds = sePayOrderDurationSeconds;
-    this.sePayQrBaseUrl = trimToNull(sePayQrBaseUrl);
+    String resolvedSePayQrBaseUrl = trimToNull(sePayQrBaseUrl);
+    this.sePayQrBaseUrl = resolvedSePayQrBaseUrl == null
+        ? SEPAY_DEFAULT_QR_BASE_URL
+        : resolvedSePayQrBaseUrl;
   }
 
   @Transactional

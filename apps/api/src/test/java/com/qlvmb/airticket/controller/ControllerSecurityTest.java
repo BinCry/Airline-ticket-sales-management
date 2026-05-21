@@ -915,7 +915,7 @@ class ControllerSecurityTest {
   }
 
   @Test
-  void paymentCallback_shouldAllowPublicAccess() throws Exception {
+  void paymentCallback_shouldRejectPublicAccess() throws Exception {
     mockMvc.perform(post("/api/payments/callback")
             .contentType(APPLICATION_JSON)
             .content("""
@@ -924,6 +924,20 @@ class ControllerSecurityTest {
                   "result": "success"
                 }
                 """))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void paymentCallback_shouldAllowBackofficeSalesAccess() throws Exception {
+    mockMvc.perform(post("/api/payments/callback")
+            .contentType(APPLICATION_JSON)
+            .content("""
+                {
+                  "bookingCode": "A6C2P1",
+                  "result": "success"
+                }
+                """)
+            .header(HttpHeaders.AUTHORIZATION, bearerToken(List.of("customer_support"), List.of("backoffice.sales"))))
         .andExpect(status().isOk());
   }
 
