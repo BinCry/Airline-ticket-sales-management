@@ -1,21 +1,22 @@
 package com.qlvmb.airticket.domain.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public record SePayWebhookRequest(
     Long id,
     String gateway,
-    String transactionDate,
-    String accountNumber,
-    String subAccount,
+    @JsonAlias("transaction_date") String transactionDate,
+    @JsonAlias("account_number") String accountNumber,
+    @JsonAlias("sub_account") String subAccount,
     String code,
     String content,
-    String transferType,
+    @JsonAlias("transfer_type") String transferType,
     String description,
-    Long transferAmount,
+    @JsonAlias("transfer_amount") Long transferAmount,
     Long accumulated,
-    String referenceCode
+    @JsonAlias("reference_code") String referenceCode
 ) {
 
   private static final Pattern PAYMENT_CODE_PATTERN =

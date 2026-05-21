@@ -26,6 +26,8 @@ import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationOutboxServiceTest {
@@ -149,6 +151,54 @@ class NotificationOutboxServiceTest {
     assertThat(response.status()).isEqualTo(NotificationOutboxEntity.STATUS_FAILED);
     assertThat(response.lastError()).isEqualTo("Không thể gửi email tới hộp thư người nhận lúc này.");
     assertThat(response.retryCount()).isEqualTo(1);
+  }
+
+  @Test
+  void createAndSendTicketEmail_shouldDelaySendUntilAfterCommitWhenTransactionActive() {
+    NotificationOutboxEntity persistedOutbox = NotificationOutboxEntity.createTicketEmail(
+        "QC5005",
+        "quanpm2006git@gmail.com",
+        "VÃ© Ä‘iá»‡n tá»­ cho mÃ£ Ä‘áº·t chá»— QC5005 | Vietnam Airlines",
+        "Ná»™i dung",
+        OffsetDateTime.parse("2026-05-17T14:30:00Z")
+    );
+    ReflectionTestUtils.setField(persistedOutbox, "id", 11L);
+
+    notificationOutboxService = new NotificationOutboxService(
+        notificationOutboxRepository,
+        mailSender,
+        true,
+        "support@airplane.id.vn"
+    );
+
+    when(notificationOutboxRepository.save(any(NotificationOutboxEntity.class)))
+        .thenAnswer(invocation -> {
+          NotificationOutboxEntity outbox = invocation.getArgument(0);
+          ReflectionTestUtils.setField(outbox, "id", 11L);
+          return outbox;
+        });
+    when(notificationOutboxRepository.findById(11L)).thenReturn(Optional.of(persistedOutbox));
+
+    TransactionSynchronizationManager.initSynchronization();
+    TransactionSynchronizationManager.setActualTransactionActive(true);
+    try {
+      NotificationOutboxResponse response = notificationOutboxService.createAndSendTicketEmail(
+          createBooking("QC5005", "quanpm2006git@gmail.com")
+      );
+
+      assertThat(response.status()).isEqualTo(NotificationOutboxEntity.STATUS_PENDING);
+      verify(mailSender, org.mockito.Mockito.never()).send(any(SimpleMailMessage.class));
+
+      for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
+        synchronization.afterCommit();
+      }
+
+      verify(mailSender).send(any(SimpleMailMessage.class));
+      assertThat(persistedOutbox.getStatus()).isEqualTo(NotificationOutboxEntity.STATUS_SENT);
+    } finally {
+      TransactionSynchronizationManager.clearSynchronization();
+      TransactionSynchronizationManager.setActualTransactionActive(false);
+    }
   }
 
   private BookingEntity createBooking(String bookingCode, String email) {

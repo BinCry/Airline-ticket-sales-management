@@ -20,6 +20,8 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 public class NotificationOutboxService {
@@ -66,7 +68,7 @@ public class NotificationOutboxService {
         currentTime
     );
     notificationOutboxRepository.save(outbox);
-    send(outbox);
+    dispatchDelivery(outbox);
     return toResponse(outbox);
   }
 
@@ -87,7 +89,7 @@ public class NotificationOutboxService {
         currentTime
     );
     notificationOutboxRepository.save(outbox);
-    send(outbox);
+    dispatchDelivery(outbox);
     return toResponse(outbox);
   }
 
@@ -137,6 +139,36 @@ public class NotificationOutboxService {
     } catch (RuntimeException exception) {
       outbox.markFailed(MAIL_DELIVERY_FAILED_MESSAGE, currentTime);
     }
+  }
+
+  private void dispatchDelivery(NotificationOutboxEntity outbox) {
+    if (TransactionSynchronizationManager.isActualTransactionActive()
+        && TransactionSynchronizationManager.isSynchronizationActive()) {
+      Long outboxId = outbox.getId();
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override
+        public void afterCommit() {
+          deliverPersistedOutbox(outboxId);
+        }
+      });
+      return;
+    }
+
+    send(outbox);
+  }
+
+  private void deliverPersistedOutbox(Long outboxId) {
+    if (outboxId == null) {
+      return;
+    }
+
+    notificationOutboxRepository.findById(outboxId).ifPresent(outbox -> {
+      if (NotificationOutboxEntity.STATUS_SENT.equals(outbox.getStatus())) {
+        return;
+      }
+      send(outbox);
+      notificationOutboxRepository.save(outbox);
+    });
   }
 
   private String buildTicketEmailBody(BookingEntity booking) {
