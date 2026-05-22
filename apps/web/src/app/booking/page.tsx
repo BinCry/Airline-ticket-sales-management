@@ -49,7 +49,7 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
   const handoffState = parseBookingHandoffState(taoUrlSearchParams(resolvedSearchParams));
 
   if (!handoffState) {
-    redirect("/search?notice=chon-chuyen-bay-truoc#dat-ve");
+    redirect("/search?notice=chon-chuyen-bay-truoc&thong-bao=chon-chuyen-bay-truoc#dat-ve");
   }
 
   return (
