@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { mainNavigation } from "@/lib/public-content";
-import { buildMainNavigation } from "@/lib/site-navigation";
+import { buildMainNavigation, isMainNavigationLinkActive } from "@/lib/site-navigation";
+
+function layLienKetTheoHref(href: string) {
+  const link = mainNavigation.find((item) => item.href === href);
+  expect(link).toBeTruthy();
+  return link!;
+}
 
 describe("site-navigation", () => {
   it("khong hien lien ket backoffice voi khach thuong", () => {
@@ -17,10 +23,40 @@ describe("site-navigation", () => {
   });
 
   it("khong con lien ket dat ve cong khai tro thang vao buoc booking", () => {
-    expect(
-      mainNavigation.find((item) => item.label === "Đặt vé")
-    ).toMatchObject({
+    expect(layLienKetTheoHref("/search#dat-ve")).toMatchObject({
       href: "/search#dat-ve"
     });
+  });
+
+  it("to xanh dat ve tai route booking", () => {
+    const datVeLink = layLienKetTheoHref("/search#dat-ve");
+    const timChuyenBayLink = layLienKetTheoHref("/search");
+
+    expect(isMainNavigationLinkActive("/booking", datVeLink)).toBe(true);
+    expect(isMainNavigationLinkActive("/booking", timChuyenBayLink)).toBe(false);
+  });
+
+  it("to xanh dat ve tai route con cua booking", () => {
+    const datVeLink = layLienKetTheoHref("/search#dat-ve");
+
+    expect(isMainNavigationLinkActive("/booking/QC5001/checkout", datVeLink)).toBe(true);
+  });
+
+  it("route search chi to xanh tab tim chuyen bay", () => {
+    const datVeLink = layLienKetTheoHref("/search#dat-ve");
+    const timChuyenBayLink = layLienKetTheoHref("/search");
+
+    expect(isMainNavigationLinkActive("/search", timChuyenBayLink)).toBe(true);
+    expect(isMainNavigationLinkActive("/search", datVeLink)).toBe(false);
+  });
+
+  it("route quan ly dat cho van to xanh dung tab", () => {
+    const quanLyDatChoLink = layLienKetTheoHref("/manage-booking");
+    const timChuyenBayLink = layLienKetTheoHref("/search");
+    const datVeLink = layLienKetTheoHref("/search#dat-ve");
+
+    expect(isMainNavigationLinkActive("/manage-booking", quanLyDatChoLink)).toBe(true);
+    expect(isMainNavigationLinkActive("/manage-booking", timChuyenBayLink)).toBe(false);
+    expect(isMainNavigationLinkActive("/manage-booking", datVeLink)).toBe(false);
   });
 });

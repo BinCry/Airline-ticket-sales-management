@@ -12,7 +12,7 @@ import {
 } from "@/lib/auth-session";
 import { hasAnyBackofficeAccess, ROLE_LABELS } from "@/lib/access-control";
 import { utilityLinks } from "@/lib/public-content";
-import { buildMainNavigation } from "@/lib/site-navigation";
+import { buildMainNavigation, isMainNavigationLinkActive } from "@/lib/site-navigation";
 
 export function SiteHeader() {
   const pathname = usePathname();
@@ -102,8 +102,7 @@ export function SiteHeader() {
         <div className={isMobileOpen ? "nav-cluster mobile-open" : "nav-cluster"}>
           <nav className="main-nav" aria-label="Điều hướng chính">
             {navigationLinks.map((link) => {
-              const isActive =
-                pathname === link.href || pathname.startsWith(`${link.href}/`);
+              const isActive = isMainNavigationLinkActive(pathname, link);
 
               return (
                 <Link
