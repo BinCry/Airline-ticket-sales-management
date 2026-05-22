@@ -11,7 +11,6 @@ import {
   type ApiFlightSearchCriteria,
   type ApiFlightSearchResponse,
   type AirportOption,
-  type FareFamily,
   type TripType
 } from "@qlvmb/shared-types";
 
@@ -31,11 +30,7 @@ import {
   locDanhSachChuyenBay,
   taoKhoangGiaDong
 } from "@/lib/flight-search-filters";
-import {
-  TIEU_CHI_TIM_CHUYEN_BAY_MAC_DINH,
-  laGoiGiaHopLe,
-  taoDuongDanTimChuyenBay
-} from "@/lib/flight-search-api";
+import { TIEU_CHI_TIM_CHUYEN_BAY_MAC_DINH, taoDuongDanTimChuyenBay } from "@/lib/flight-search-api";
 import { formatCurrency } from "@/lib/format";
 
 const toneMap = {
@@ -81,19 +76,38 @@ const tripLabels: Record<TripType, string> = {
 
 const timeSlotOptions: SearchTimeSlot[] = ["khuya", "sang", "chieu", "toi"];
 const minimumSeatOptions: Array<0 | 1 | 5 | 10> = [0, 1, 5, 10];
-const fareFamilyOptions: FareFamily[] = [
-  "pho_thong_tiet_kiem",
-  "pho_thong_linh_hoat",
-  "thuong_gia"
+const airportDisplayOrder = [
+  "SGN",
+  "HAN",
+  "DAD",
+  "PQC",
+  "CXR",
+  "HUI",
+  "VCA",
+  "HPH",
+  "VII",
+  "VDH",
+  "UIH",
+  "THD",
+  "DLI",
+  "PXU",
+  "BMV",
+  "CAH",
+  "VCL",
+  "DIN",
+  "TBB",
+  "VCS",
+  "VKG"
 ];
-const airportDisplayOrder = ["SGN", "HAN", "DAD", "PQC", "CXR", "HUI", "VCA", "HPH", "VII"];
 const routePresets = [
   { from: "SGN", to: "HAN", label: "TP. Hồ Chí Minh → Hà Nội" },
   { from: "SGN", to: "DAD", label: "TP. Hồ Chí Minh → Đà Nẵng" },
   { from: "HAN", to: "PQC", label: "Hà Nội → Phú Quốc" },
   { from: "DAD", to: "CXR", label: "Đà Nẵng → Nha Trang" },
   { from: "SGN", to: "VCA", label: "TP. Hồ Chí Minh → Cần Thơ" },
-  { from: "HAN", to: "HUI", label: "Hà Nội → Huế" }
+  { from: "HAN", to: "HUI", label: "Hà Nội → Huế" },
+  { from: "SGN", to: "UIH", label: "TP. Hồ Chí Minh → Quy Nhơn" },
+  { from: "HAN", to: "DLI", label: "Hà Nội → Đà Lạt" }
 ] as const;
 
 type NhomHanhKhach = "adult" | "child" | "infant";
@@ -103,7 +117,7 @@ interface SearchResultsPageClientProps {
   notice: string | null;
   searchData: ApiFlightSearchResponse | null;
   searchError: string | null;
-  selectedOutboundInventoryId: number | null;
+  selectedOutboundFlightId: number | null;
 }
 
 interface PassengerCounterCardProps {
@@ -177,14 +191,6 @@ function hienThiKhungNgay(criteria: ApiFlightSearchCriteria): string {
   return `${dinhDangNgay(criteria.departureDate)} → ${dinhDangNgay(criteria.returnDate)}`;
 }
 
-function hienThiTrangThaiLocGoiGia(criteria: ApiFlightSearchCriteria): string {
-  if (!criteria.fareFamily) {
-    return "Tất cả hạng vé";
-  }
-
-  return hienThiTenGoiGia(criteria.fareFamily);
-}
-
 function hienThiThongBaoDieuHuong(notice: string | null): string | null {
   if (notice === "chon-chuyen-bay-truoc") {
     return "Hãy chọn ít nhất một chuyến bay một chiều hoặc khứ hồi trước khi chuyển sang bước nhập thông tin đặt vé.";
@@ -208,7 +214,7 @@ function taoDuongDanChonChieuDi(
   const basePath = taoDuongDanTimChuyenBay(criteria);
   const [pathname, queryString] = basePath.split("?");
   const nextSearchParams = new URLSearchParams(queryString ?? "");
-  nextSearchParams.set("selectedOutbound", String(flight.inventoryId));
+  nextSearchParams.set("selectedOutbound", String(flight.flightId));
   return `${pathname}?${nextSearchParams.toString()}`;
 }
 
@@ -315,7 +321,7 @@ function taoTheKetQua(
       </div>
 
       {flights.map((flight) => (
-        <article key={`${tieuDe}-${flight.inventoryId}`} className="surface-card result-card">
+        <article key={`${tieuDe}-${flight.flightId}`} className="surface-card result-card">
           <div className="result-top">
             <div>
               <span className="section-eyebrow">Chuyến bay {flight.code}</span>
@@ -339,16 +345,25 @@ function taoTheKetQua(
 
           <div className="result-grid result-grid-rich">
             <div>
-              <span>Gói giá</span>
-              <strong>{hienThiTenGoiGia(flight.fareFamily)}</strong>
+              <span>Giá mở đầu</span>
+              <strong>{formatCurrency(flight.baseFare)}</strong>
             </div>
             <div>
-              <span>Còn lại</span>
-              <strong>{flight.seatsLeft} ghế</strong>
+              <span>Tổng ghế còn bán</span>
+              <strong>{flight.fares.reduce((tong, fare) => tong + fare.seatsLeft, 0)} ghế</strong>
             </div>
-            <div>
-              <span>Giá từ</span>
-              <strong>{formatCurrency(flight.price)}</strong>
+            <div className="result-grid-fare-box">
+              <span>Theo 3 hạng vé</span>
+              <ul className="list-clean result-fare-list">
+                {flight.fares.map((fare) => (
+                  <li key={`${flight.flightId}-${fare.inventoryId}`}>
+                    <strong>{hienThiTenGoiGia(fare.fareFamily)}</strong>
+                    <span>
+                      {formatCurrency(fare.price)} • còn {fare.seatsLeft} ghế
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
 
@@ -366,12 +381,12 @@ function taoTheKetQua(
                 href={taoDuongDanChonChieuDi(criteria, flight)}
                 scroll={false}
                 className={`button ${
-                  selectedOutboundFlight?.inventoryId === flight.inventoryId
+                  selectedOutboundFlight?.flightId === flight.flightId
                     ? "button-secondary"
                     : "button-primary"
                 }`}
               >
-                {selectedOutboundFlight?.inventoryId === flight.inventoryId
+                {selectedOutboundFlight?.flightId === flight.flightId
                   ? "Đã chọn chiều đi"
                   : "Chọn chiều đi"}
               </Link>
@@ -399,7 +414,7 @@ export function SearchResultsPageClient({
   notice,
   searchData,
   searchError,
-  selectedOutboundInventoryId
+  selectedOutboundFlightId
 }: SearchResultsPageClientProps) {
   const router = useRouter();
   const [tripType, setTripType] = useState<TripType>(criteria.tripType);
@@ -407,12 +422,10 @@ export function SearchResultsPageClient({
   const [to, setTo] = useState(criteria.to);
   const [departureDate, setDepartureDate] = useState(criteria.departureDate);
   const [returnDate, setReturnDate] = useState(criteria.returnDate ?? "");
-  const [fareFamily, setFareFamily] = useState<FareFamily | "all">(criteria.fareFamily ?? "all");
   const [adultCount, setAdultCount] = useState(criteria.adultCount);
   const [childCount, setChildCount] = useState(criteria.childCount);
   const [infantCount, setInfantCount] = useState(criteria.infantCount);
   const [dangTaiKetQua, setDangTaiKetQua] = useState(false);
-  const [loiGoiGia, setLoiGoiGia] = useState("");
   const [goiYSanBayDi, setGoiYSanBayDi] = useState<AirportOption[]>([]);
   const [goiYSanBayDen, setGoiYSanBayDen] = useState<AirportOption[]>([]);
   const [sanBayPhoBien, setSanBayPhoBien] = useState<AirportOption[]>([]);
@@ -428,12 +441,10 @@ export function SearchResultsPageClient({
     setTo(criteria.to);
     setDepartureDate(criteria.departureDate);
     setReturnDate(criteria.returnDate ?? "");
-    setFareFamily(criteria.fareFamily ?? "all");
     setAdultCount(criteria.adultCount);
     setChildCount(criteria.childCount);
     setInfantCount(criteria.infantCount);
     setDangTaiKetQua(false);
-    setLoiGoiGia("");
     setFilterState(DEFAULT_FLIGHT_SEARCH_FILTER_STATE);
   }, [criteria]);
 
@@ -531,13 +542,13 @@ export function SearchResultsPageClient({
   const outboundFlights = locDanhSachChuyenBay(outboundFlightsRaw, filterState, budgetOptions);
   const returnFlights = locDanhSachChuyenBay(returnFlightsRaw, filterState, budgetOptions);
   const selectedOutboundFlight =
-    selectedOutboundInventoryId === null
+    selectedOutboundFlightId === null
       ? null
-      : outboundFlightsRaw.find((flight) => flight.inventoryId === selectedOutboundInventoryId) ?? null;
+      : outboundFlightsRaw.find((flight) => flight.flightId === selectedOutboundFlightId) ?? null;
   const thongBaoDieuHuong = hienThiThongBaoDieuHuong(notice);
   const passengerSummary = `${adultCount} người lớn, ${childCount} trẻ em, ${infantCount} em bé`;
   const bestPrice =
-    allFlights.length > 0 ? formatCurrency(Math.min(...allFlights.map((flight) => flight.price))) : "Chưa có";
+    allFlights.length > 0 ? formatCurrency(Math.min(...allFlights.map((flight) => flight.baseFare))) : "Chưa có";
   const tongKhach = tongHanhKhach(adultCount, childCount, infantCount);
   const sanBayDiPhoBien = sanBayPhoBien.slice(0, 6);
   const sanBayDenPhoBien = sanBayPhoBien.filter((sanBay) => sanBay.code !== from).slice(0, 6);
@@ -556,7 +567,7 @@ export function SearchResultsPageClient({
       kind: "date" as const
     },
     {
-      label: "Mức giá tốt nhất",
+      label: "Giá mở đầu tốt nhất",
       value: bestPrice,
       compact: false,
       kind: "text" as const
@@ -664,15 +675,6 @@ export function SearchResultsPageClient({
     if (tripType === "multi_city") {
       return;
     }
-
-    const goiGiaDuocChon = fareFamily === "all" ? null : String(fareFamily);
-
-    if (goiGiaDuocChon && !laGoiGiaHopLe(goiGiaDuocChon)) {
-      setLoiGoiGia("Hạng vé không hợp lệ. Vui lòng chọn lại.");
-      return;
-    }
-
-    setLoiGoiGia("");
     setDangTaiKetQua(true);
 
     startTransition(() => {
@@ -686,7 +688,6 @@ export function SearchResultsPageClient({
               ? returnDate || TIEU_CHI_TIM_CHUYEN_BAY_MAC_DINH.returnDate
               : null,
           tripType,
-          fareFamily: goiGiaDuocChon as FareFamily | null,
           adultCount,
           childCount,
           infantCount
@@ -703,23 +704,16 @@ export function SearchResultsPageClient({
     }));
   }
 
-  function xuLyBatTatGoiGia(nextFareFamily: FareFamily) {
-    setFilterState((currentState) => ({
-      ...currentState,
-      fareFamilies: capNhatDanhSachDaChon(currentState.fareFamilies, nextFareFamily)
-    }));
-  }
-
   return (
     <section className="section">
       <div className="container">
         <div className="page-hero-card search-page-hero">
           <div>
             <span className="section-eyebrow">Tìm chuyến bay</span>
-            <h1 className="page-title">Chọn chuyến bay phù hợp theo giờ khởi hành, gói giá và ngân sách.</h1>
+            <h1 className="page-title">Chọn chuyến bay phù hợp theo giờ khởi hành, giá mở đầu và số ghế còn bán.</h1>
             <p className="page-hero-copy">
-              So sánh nhanh giờ bay, thời lượng, số ghế còn lại và điều kiện gói giá để chốt hành
-              trình phù hợp.
+              So sánh nhanh giờ bay, thời lượng, giá Phổ thông tiết kiệm và tình trạng ghế của cả
+              ba hạng vé trước khi chuyển sang bước đặt chỗ.
             </p>
           </div>
           <div className="page-hero-stat-grid">
@@ -853,23 +847,6 @@ export function SearchResultsPageClient({
                     disabled={tripType === "one_way"}
                     onChange={(event) => setReturnDate(event.target.value)}
                   />
-                </label>
-
-                <label className="field">
-                  <span>Hạng vé</span>
-                  <select
-                    value={fareFamily}
-                    onChange={(event) => {
-                      setFareFamily(event.target.value as FareFamily | "all");
-                      setLoiGoiGia("");
-                    }}
-                  >
-                    <option value="all">Tất cả hạng vé</option>
-                    <option value="pho_thong_tiet_kiem">Phổ thông tiết kiệm</option>
-                    <option value="pho_thong_linh_hoat">Phổ thông linh hoạt</option>
-                    <option value="thuong_gia">Thương gia</option>
-                  </select>
-                  {loiGoiGia ? <small>{loiGoiGia}</small> : null}
                 </label>
               </div>
 
@@ -1042,27 +1019,10 @@ export function SearchResultsPageClient({
               </div>
 
               <div className="search-filter-section">
-                <span className="search-filter-title">Gói giá</span>
-                <div className={taoLopDanhSachChipBoLoc(fareFamilyOptions.length)}>
-                  {fareFamilyOptions.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      className={
-                        filterState.fareFamilies.includes(item)
-                          ? "assurance-chip filter-chip-button active"
-                          : "assurance-chip filter-chip-button"
-                      }
-                      onClick={() => xuLyBatTatGoiGia(item)}
-                    >
-                      {hienThiTenGoiGia(item)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="search-filter-section">
-                <span className="search-filter-title">Ngân sách</span>
+                <span className="search-filter-title">Ngân sách mở đầu</span>
+                <p className="filter-note filter-note-inline">
+                  Tính theo giá Phổ thông tiết kiệm của từng chuyến bay.
+                </p>
                 <div className={taoLopDanhSachChipBoLoc(Math.max(budgetOptions.length, 1))}>
                   {budgetOptions.length > 0 ? (
                     budgetOptions.map((option) => (
@@ -1118,7 +1078,7 @@ export function SearchResultsPageClient({
 
             <div className="filter-summary-row">
               <div className="filter-note">
-                Đang áp dụng hạng vé trên form tìm kiếm: <strong>{hienThiTrangThaiLocGoiGia(criteria)}</strong>
+                Mỗi chuyến bay đều có đủ Phổ thông tiết kiệm, Phổ thông linh hoạt và Thương gia.
               </div>
               {criteria.tripType === "round_trip" ? (
                 <div className="filter-note">
@@ -1156,9 +1116,9 @@ export function SearchResultsPageClient({
           <>
             <div className="section-gap" />
             <SectionHeading
-              eyebrow="So sánh gói giá"
-              title="So sánh gói giá để chọn đúng nhu cầu của từng hành trình"
-              description="Mỗi gói vé làm rõ quyền lợi về hành lý, đổi hoặc hoàn và lựa chọn chỗ ngồi để hành khách đưa ra quyết định ngay tại bước tìm chuyến."
+              eyebrow="So sánh hạng vé"
+              title="So sánh ba hạng vé cố định trước khi chọn chỗ"
+              description="Mỗi chuyến bay đều có đủ Phổ thông tiết kiệm, Phổ thông linh hoạt và Thương gia để bạn cân đối nhu cầu và ngân sách ngay từ bước tìm chuyến."
             />
             <div className="card-grid card-grid-3">
               {searchData.fares.map((fare) => (

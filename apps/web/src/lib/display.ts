@@ -2,7 +2,24 @@ const TEN_SAN_BAY_THEO_MA: Record<string, string> = {
   SGN: "Thành phố Hồ Chí Minh",
   HAN: "Hà Nội",
   DAD: "Đà Nẵng",
-  PQC: "Phú Quốc"
+  PQC: "Phú Quốc",
+  CXR: "Nha Trang",
+  HUI: "Huế",
+  VCA: "Cần Thơ",
+  HPH: "Hải Phòng",
+  VII: "Vinh",
+  VDH: "Đồng Hới",
+  UIH: "Quy Nhơn",
+  THD: "Thanh Hóa",
+  DLI: "Đà Lạt",
+  PXU: "Pleiku",
+  BMV: "Buôn Ma Thuột",
+  CAH: "Cà Mau",
+  VCL: "Chu Lai",
+  DIN: "Điện Biên",
+  TBB: "Tuy Hòa",
+  VCS: "Côn Đảo",
+  VKG: "Rạch Giá"
 };
 
 const TEN_GOI_GIA: Record<string, string> = {

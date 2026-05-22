@@ -2190,7 +2190,7 @@ img {
 }
 
 .search-toolbar-detail-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .search-toolbar-support-grid {
@@ -2456,7 +2456,7 @@ img {
 }
 
 .filter-toolbar-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .filter-summary-row {
@@ -2467,6 +2467,10 @@ img {
   margin-top: 0;
   color: var(--muted);
   line-height: 1.7;
+}
+
+.filter-note-inline {
+  margin-bottom: 10px;
 }
 
 .sticky-card {
@@ -2573,6 +2577,25 @@ img {
   display: block;
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+.result-grid-fare-box {
+  display: grid;
+  gap: 10px;
+}
+
+.result-fare-list {
+  display: grid;
+  gap: 10px;
+}
+
+.result-fare-list li {
+  display: grid;
+  gap: 4px;
+}
+
+.result-fare-list strong {
+  font-size: 0.92rem;
 }
 
 .result-actions {

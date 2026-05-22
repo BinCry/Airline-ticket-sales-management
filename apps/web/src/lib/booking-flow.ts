@@ -1,22 +1,20 @@
 import type {
   ApiCreateBookingHoldRequest,
   ApiFlightCard,
-  ApiFlightSearchCriteria,
-  FareFamily
+  ApiFlightSearchCriteria
 } from "@qlvmb/shared-types";
 
 export interface BookingHandoffSegment {
   arrivalAt: string;
   arrivalTime: string;
+  baseFare: number;
   code: string;
   departureAt: string;
   departureTime: string;
   destinationCode: string;
-  fareFamily: FareFamily;
+  flightId: number;
   from: string;
-  inventoryId: number;
   originCode: string;
-  price: number;
   to: string;
 }
 
@@ -43,7 +41,7 @@ function readPositiveInteger(value: string | null): number | null {
 
 function readSegment(searchParams: URLSearchParams, index: number): BookingHandoffSegment | null {
   const prefix = `segment${index}`;
-  const inventoryId = readPositiveInteger(searchParams.get(`${prefix}InventoryId`));
+  const flightId = readPositiveInteger(searchParams.get(`${prefix}FlightId`));
   const code = searchParams.get(`${prefix}Code`);
   const from = searchParams.get(`${prefix}From`);
   const to = searchParams.get(`${prefix}To`);
@@ -53,11 +51,10 @@ function readSegment(searchParams: URLSearchParams, index: number): BookingHando
   const arrivalAt = searchParams.get(`${prefix}ArrivalAt`);
   const departureTime = searchParams.get(`${prefix}DepartureTime`);
   const arrivalTime = searchParams.get(`${prefix}ArrivalTime`);
-  const fareFamily = searchParams.get(`${prefix}FareFamily`) as FareFamily | null;
-  const price = readPositiveInteger(searchParams.get(`${prefix}Price`));
+  const baseFare = readPositiveInteger(searchParams.get(`${prefix}BaseFare`));
 
   if (
-    inventoryId === null ||
+    flightId === null ||
     !code ||
     !from ||
     !to ||
@@ -67,8 +64,7 @@ function readSegment(searchParams: URLSearchParams, index: number): BookingHando
     !arrivalAt ||
     !departureTime ||
     !arrivalTime ||
-    !fareFamily ||
-    price === null
+    baseFare === null
   ) {
     return null;
   }
@@ -76,15 +72,14 @@ function readSegment(searchParams: URLSearchParams, index: number): BookingHando
   return {
     arrivalAt,
     arrivalTime,
+    baseFare,
     code,
     departureAt,
     departureTime,
     destinationCode,
-    fareFamily,
+    flightId,
     from,
-    inventoryId,
     originCode,
-    price,
     to
   };
 }
@@ -102,7 +97,7 @@ export function createBookingHandoffUrl(
 
   segments.forEach((segment, index) => {
     const segmentNumber = index + 1;
-    searchParams.set(`segment${segmentNumber}InventoryId`, String(segment.inventoryId));
+    searchParams.set(`segment${segmentNumber}FlightId`, String(segment.flightId));
     searchParams.set(`segment${segmentNumber}Code`, segment.code);
     searchParams.set(`segment${segmentNumber}From`, segment.from);
     searchParams.set(`segment${segmentNumber}To`, segment.to);
@@ -112,8 +107,7 @@ export function createBookingHandoffUrl(
     searchParams.set(`segment${segmentNumber}ArrivalAt`, segment.arrivalAt);
     searchParams.set(`segment${segmentNumber}DepartureTime`, segment.departureTime);
     searchParams.set(`segment${segmentNumber}ArrivalTime`, segment.arrivalTime);
-    searchParams.set(`segment${segmentNumber}FareFamily`, segment.fareFamily);
-    searchParams.set(`segment${segmentNumber}Price`, String(segment.price));
+    searchParams.set(`segment${segmentNumber}BaseFare`, String(segment.baseFare));
   });
 
   return `/booking?${searchParams.toString()}`;
@@ -123,15 +117,14 @@ export function createHandoffSegmentFromFlight(flight: ApiFlightCard): BookingHa
   return {
     arrivalAt: flight.arrivalAt,
     arrivalTime: flight.arrivalTime,
+    baseFare: flight.baseFare,
     code: flight.code,
     departureAt: flight.departureAt,
     departureTime: flight.departureTime,
     destinationCode: flight.destinationCode,
-    fareFamily: flight.fareFamily,
+    flightId: flight.flightId,
     from: flight.from,
-    inventoryId: flight.inventoryId,
     originCode: flight.originCode,
-    price: flight.price,
     to: flight.to
   };
 }

@@ -449,7 +449,7 @@ export function ManageBookingPageClient() {
                 <SectionHeading
                   eyebrow="Hành trình"
                   title="Chi tiết chuyến bay"
-                  description="Kiểm tra kỹ thời gian khởi hành, điểm đi, điểm đến và gói giá đã chọn."
+                  description="Kiểm tra kỹ thời gian khởi hành, điểm đi, điểm đến và hạng vé đã chốt cho từng chặng."
                 />
                 <div className="stack-list">
                   {bookingOverview.segments.map((segment, index) => (

@@ -73,6 +73,7 @@ public class SecurityConfig {
             .requestMatchers(
                 HttpMethod.GET,
                 "/api/flights/search",
+                "/api/flights/*/booking-options",
                 "/api/flights/status",
                 "/api/airports",
                 "/api/cms/homepage",

@@ -22,7 +22,19 @@ public record BackofficeFlightOperationsResponse(
       String statusLabel,
       String gate,
       String note,
-      boolean salesOpen
+      boolean salesOpen,
+      long baseFare,
+      List<FareReadonlyItem> fareSummaries
+  ) {
+  }
+
+  public record FareReadonlyItem(
+      String fareFamily,
+      String title,
+      long price,
+      int totalSeats,
+      int rowStart,
+      int rowEnd
   ) {
   }
 }

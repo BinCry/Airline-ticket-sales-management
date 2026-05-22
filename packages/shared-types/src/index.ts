@@ -211,14 +211,21 @@ export interface ApiFlightSearchCriteria {
   departureDate: string;
   returnDate: string | null;
   tripType: Exclude<TripType, "multi_city">;
-  fareFamily: FareFamily | null;
   adultCount: number;
   childCount: number;
   infantCount: number;
 }
 
-export interface ApiFlightCard {
+export interface ApiFlightFareOption {
   inventoryId: number;
+  fareFamily: FareFamily;
+  title: string;
+  price: number;
+  seatsLeft: number;
+  totalSeats: number;
+}
+
+export interface ApiFlightCard {
   flightId: number;
   code: string;
   from: string;
@@ -231,9 +238,8 @@ export interface ApiFlightCard {
   arrivalTime: string;
   duration: string;
   status: FlightStatus;
-  fareFamily: FareFamily;
-  price: number;
-  seatsLeft: number;
+  baseFare: number;
+  fares: ApiFlightFareOption[];
 }
 
 export interface ApiFareCard {
@@ -293,7 +299,8 @@ export interface ApiBookingPassengerInput {
 }
 
 export interface ApiBookingSegmentInput {
-  inventoryId: number;
+  inventoryId?: number | null;
+  flightId?: number | null;
 }
 
 export interface ApiBookingAncillaryInput {
@@ -304,7 +311,39 @@ export interface ApiBookingAncillaryInput {
 export interface ApiBookingSeatSelectionInput {
   inventoryId: number;
   passengerIndex: number;
+  segmentIndex?: number | null;
   seatNumber: string;
+}
+
+export interface ApiFlightBookingSeatItem {
+  seatNumber: string;
+  fareFamily: FareFamily;
+  occupied: boolean;
+}
+
+export interface ApiFlightBookingFareOption {
+  inventoryId: number;
+  fareFamily: FareFamily;
+  title: string;
+  price: number;
+  seatsLeft: number;
+  totalSeats: number;
+  rowStart: number;
+  rowEnd: number;
+}
+
+export interface ApiFlightBookingOptionsResponse {
+  flightId: number;
+  code: string;
+  originCode: string;
+  destinationCode: string;
+  from: string;
+  to: string;
+  departureAt: string;
+  arrivalAt: string;
+  baseFare: number;
+  fareOptions: ApiFlightBookingFareOption[];
+  seats: ApiFlightBookingSeatItem[];
 }
 
 export interface ApiCreateBookingHoldRequest {

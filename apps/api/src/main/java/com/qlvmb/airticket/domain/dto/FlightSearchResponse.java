@@ -20,7 +20,6 @@ public record FlightSearchResponse(
       String departureDate,
       String returnDate,
       String tripType,
-      String fareFamily,
       int adultCount,
       int childCount,
       int infantCount
@@ -28,7 +27,6 @@ public record FlightSearchResponse(
   }
 
   public record FlightCard(
-      long inventoryId,
       long flightId,
       String code,
       String from,
@@ -41,9 +39,18 @@ public record FlightSearchResponse(
       String arrivalTime,
       String duration,
       String status,
+      long baseFare,
+      List<FareOption> fares
+  ) {
+  }
+
+  public record FareOption(
+      long inventoryId,
       String fareFamily,
+      String title,
       long price,
-      long seatsLeft
+      int seatsLeft,
+      int totalSeats
   ) {
   }
 

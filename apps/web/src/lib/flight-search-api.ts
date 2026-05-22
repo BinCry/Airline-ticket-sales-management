@@ -1,10 +1,8 @@
 import {
-  FARE_FAMILIES,
   type ApiFareCard,
   type ApiFlightCard,
   type ApiFlightSearchCriteria,
-  type ApiFlightSearchResponse,
-  type FareFamily
+  type ApiFlightSearchResponse
 } from "@qlvmb/shared-types";
 
 import { ApiClientError, requestApi } from "@/lib/api-client";
@@ -17,7 +15,6 @@ export const TIEU_CHI_TIM_CHUYEN_BAY_MAC_DINH: ApiFlightSearchCriteria = {
   departureDate: "2026-05-23",
   returnDate: "2026-05-26",
   tripType: "round_trip",
-  fareFamily: "pho_thong_linh_hoat",
   adultCount: 1,
   childCount: 0,
   infantCount: 0
@@ -86,20 +83,6 @@ function chuanHoaLoaiHanhTrinh(giaTri: RawSearchParam): ApiFlightSearchCriteria[
   return layGiaTriDauTien(giaTri) === "one_way" ? "one_way" : "round_trip";
 }
 
-export function laGoiGiaHopLe(giaTri: string): giaTri is FareFamily {
-  return FARE_FAMILIES.includes(giaTri as FareFamily);
-}
-
-function chuanHoaGoiGia(giaTri: RawSearchParam): FareFamily | null {
-  const goiGia = layGiaTriDauTien(giaTri);
-
-  if (!goiGia || !laGoiGiaHopLe(goiGia)) {
-    return null;
-  }
-
-  return goiGia;
-}
-
 function laMangChuyenBayHopLe(giaTri: unknown): giaTri is ApiFlightCard[] {
   return Array.isArray(giaTri);
 }
@@ -129,7 +112,6 @@ export function chuanHoaTieuChiTimChuyenBay(
     departureDate,
     returnDate,
     tripType,
-    fareFamily: chuanHoaGoiGia(searchParams.fareFamily),
     adultCount: chuanHoaSoLuong(
       searchParams.adultCount,
       TIEU_CHI_TIM_CHUYEN_BAY_MAC_DINH.adultCount,
@@ -163,10 +145,6 @@ export function taoDuongDanTimChuyenBay(criteria: ApiFlightSearchCriteria): stri
     params.set("returnDate", criteria.returnDate);
   }
 
-  if (criteria.fareFamily) {
-    params.set("fareFamily", criteria.fareFamily);
-  }
-
   return `/search?${params.toString()}`;
 }
 
@@ -185,10 +163,6 @@ export async function fetchFlightSearch(
 
   if (criteria.tripType === "round_trip" && criteria.returnDate) {
     params.set("returnDate", criteria.returnDate);
-  }
-
-  if (criteria.fareFamily) {
-    params.set("fareFamily", criteria.fareFamily);
   }
 
   let payload: Partial<ApiFlightSearchResponse>;

@@ -21,7 +21,7 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const criteria = chuanHoaTieuChiTimChuyenBay(resolvedSearchParams);
   const selectedOutboundRaw = layGiaTriDauTien(resolvedSearchParams.selectedOutbound).trim();
-  const selectedOutboundInventoryId = Number.parseInt(selectedOutboundRaw, 10);
+  const selectedOutboundFlightId = Number.parseInt(selectedOutboundRaw, 10);
   const notice = layGiaTriDauTien(resolvedSearchParams.notice).trim() || null;
 
   let searchData: ApiFlightSearchResponse | null = null;
@@ -42,8 +42,8 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
       notice={notice}
       searchData={searchData}
       searchError={searchError}
-      selectedOutboundInventoryId={
-        Number.isFinite(selectedOutboundInventoryId) ? selectedOutboundInventoryId : null
+      selectedOutboundFlightId={
+        Number.isFinite(selectedOutboundFlightId) ? selectedOutboundFlightId : null
       }
     />
   );

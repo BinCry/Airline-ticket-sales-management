@@ -24,10 +24,8 @@ import com.qlvmb.airticket.security.AuthenticatedUser;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,7 +35,6 @@ public class BackofficeOperationsService {
   private static final ZoneId ZONE_ID = ZoneId.of("Asia/Ho_Chi_Minh");
   private static final int DEFAULT_LOOKAHEAD_DAYS = 30;
   private static final int DEFAULT_LIMIT = 50;
-  private static final int SEAT_MAP_MAX_CAPACITY = 168;
 
   private final FlightRepository flightRepository;
   private final AirportRepository airportRepository;
@@ -143,29 +140,7 @@ public class BackofficeOperationsService {
         normalizedNote,
         request.salesOpen()
     );
-
-    Set<String> usedFareFamilies = new HashSet<>();
-    int declaredSeatCount = 0;
-    for (BackofficeFlightCreateRequest.FareInventoryItem fareInventory : request.fareInventories()) {
-      String normalizedFareFamily = productCatalogService.normalizeFareFamily(fareInventory.fareFamily());
-      productCatalogService.requireFareMeta(normalizedFareFamily);
-      if (!usedFareFamilies.add(normalizedFareFamily)) {
-        throw new BadRequestException("Mỗi hạng vé chỉ được khai báo một lần trên cùng chuyến bay.");
-      }
-      declaredSeatCount += fareInventory.totalSeats();
-      if (declaredSeatCount > SEAT_MAP_MAX_CAPACITY) {
-        throw new BadRequestException(
-            "Tổng số ghế theo các hạng vé vượt quá sức chứa sơ đồ ghế hiện tại (" + SEAT_MAP_MAX_CAPACITY + " ghế)."
-        );
-      }
-
-      flight.addFareInventory(FlightFareInventoryEntity.create(
-          flight,
-          normalizedFareFamily,
-          fareInventory.totalSeats(),
-          fareInventory.price()
-      ));
-    }
+    syncFixedFareInventories(flight, request.baseFare());
 
     FlightEntity savedFlight = flightRepository.save(flight);
     auditLogRepository.save(AuditLogEntity.create(
@@ -174,7 +149,8 @@ public class BackofficeOperationsService {
         "flight",
         savedFlight.getCode(),
         "Tạo chuyến bay " + savedFlight.getCode() + " từ " + normalizedOriginCode + " đến "
-            + normalizedDestinationCode + ", cất cánh " + savedFlight.getDepartureAt(),
+            + normalizedDestinationCode + ", cất cánh " + savedFlight.getDepartureAt()
+            + ", giá gốc " + request.baseFare(),
         OffsetDateTime.now()
     ));
 
@@ -195,10 +171,12 @@ public class BackofficeOperationsService {
     String nextGate = normalizeOptional(request.gate());
     String nextNote = normalizeOptional(request.note());
     boolean nextSalesOpen = request.salesOpen();
+    Long nextBaseFare = request.baseFare();
     String oldStatus = flight.getStatus();
     String oldGate = flight.getGate();
     String oldNote = flight.getOperationsNote();
     boolean oldSalesOpen = flight.isSalesOpen();
+    long oldBaseFare = resolveBaseFareSafely(flight);
 
     if (!flight.isCancelled() && "cancelled".equals(nextStatus)) {
       throw new BadRequestException("Vui lòng dùng thao tác hủy chuyến riêng để đảm bảo đồng bộ booking và email.");
@@ -211,10 +189,16 @@ public class BackofficeOperationsService {
       if (nextSalesOpen) {
         throw new BadRequestException("Chuyến bay đã hủy không thể mở bán trở lại từ màn hình này.");
       }
+      if (nextBaseFare != null) {
+        throw new BadRequestException("Chuyến bay đã hủy không thể điều chỉnh giá gốc.");
+      }
       nextSalesOpen = false;
     }
 
     flight.updateOperations(nextStatus, nextGate, nextNote, nextSalesOpen);
+    if (nextBaseFare != null) {
+      syncFixedFareInventories(flight, nextBaseFare);
+    }
 
     auditLogRepository.save(AuditLogEntity.create(
         actorAccount,
@@ -225,7 +209,8 @@ public class BackofficeOperationsService {
             + " từ trạng thái " + oldStatus + " sang " + nextStatus
             + ", gate " + stringifyValue(oldGate) + " sang " + stringifyValue(nextGate)
             + ", ghi chú " + stringifyValue(oldNote) + " sang " + stringifyValue(nextNote)
-            + ", mở bán " + oldSalesOpen + " sang " + nextSalesOpen,
+            + ", mở bán " + oldSalesOpen + " sang " + nextSalesOpen
+            + ", giá gốc " + oldBaseFare + " sang " + (nextBaseFare == null ? oldBaseFare : nextBaseFare),
         OffsetDateTime.now()
     ));
 
@@ -350,6 +335,7 @@ public class BackofficeOperationsService {
   }
 
   private BackofficeFlightOperationsResponse.FlightItem mapFlight(FlightEntity flight) {
+    long baseFare = resolveBaseFareSafely(flight);
     return new BackofficeFlightOperationsResponse.FlightItem(
         flight.getId(),
         flight.getCode(),
@@ -363,8 +349,43 @@ public class BackofficeOperationsService {
         statusLabel(flight.getStatus()),
         resolveGate(flight),
         resolveNote(flight),
-        flight.isSalesOpen()
+        flight.isSalesOpen(),
+        baseFare,
+        buildFareSummaries(baseFare)
     );
+  }
+
+  private void syncFixedFareInventories(FlightEntity flight, long baseFare) {
+    productCatalogService.getFixedFareMetas().forEach(fareMeta -> {
+      long price = productCatalogService.resolveFarePrice(fareMeta.fareFamily(), baseFare);
+      flight.findFareInventory(fareMeta.fareFamily())
+          .ifPresentOrElse(
+              inventory -> inventory.syncConfiguration(fareMeta.totalSeats(), price),
+              () -> flight.addFareInventory(FlightFareInventoryEntity.create(
+                  flight,
+                  fareMeta.fareFamily(),
+                  fareMeta.totalSeats(),
+                  price
+              ))
+          );
+    });
+  }
+
+  private long resolveBaseFareSafely(FlightEntity flight) {
+    return productCatalogService.resolveBaseFare(flight.getFareInventories());
+  }
+
+  private List<BackofficeFlightOperationsResponse.FareReadonlyItem> buildFareSummaries(long baseFare) {
+    return productCatalogService.getFixedFareMetas().stream()
+        .map(fareMeta -> new BackofficeFlightOperationsResponse.FareReadonlyItem(
+            fareMeta.fareFamily(),
+            fareMeta.title(),
+            productCatalogService.resolveFarePrice(fareMeta.fareFamily(), baseFare),
+            fareMeta.totalSeats(),
+            fareMeta.rowStart(),
+            fareMeta.rowEnd()
+        ))
+        .toList();
   }
 
   private String resolveGate(FlightEntity flight) {

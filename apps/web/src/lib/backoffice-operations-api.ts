@@ -11,12 +11,16 @@ export interface BackofficeOperationsUpdateInput {
   gate: string | null;
   note: string | null;
   salesOpen: boolean;
+  baseFare: number | null;
 }
 
-export interface BackofficeFlightFareInventoryInput {
+export interface BackofficeFareReadonlyItem {
   fareFamily: string;
+  title: string;
   totalSeats: number;
   price: number;
+  rowStart: number;
+  rowEnd: number;
 }
 
 export interface BackofficeOperationsFlightCreateInput {
@@ -28,7 +32,7 @@ export interface BackofficeOperationsFlightCreateInput {
   gate: string;
   note: string;
   salesOpen: boolean;
-  fareInventories: BackofficeFlightFareInventoryInput[];
+  baseFare: number;
 }
 
 export interface BackofficeOperationsFlightItem {
@@ -45,6 +49,8 @@ export interface BackofficeOperationsFlightItem {
   gate: string;
   note: string;
   salesOpen: boolean;
+  baseFare: number;
+  fareSummaries: BackofficeFareReadonlyItem[];
 }
 
 export interface BackofficeOperationsFlightsResponse {
@@ -117,6 +123,22 @@ function laBoolean(value: unknown): value is boolean {
   return typeof value === "boolean";
 }
 
+function laFareReadonlyItem(value: unknown): value is BackofficeFareReadonlyItem {
+  return (
+    laBanGhi(value) &&
+    laChuoi(value.fareFamily) &&
+    laChuoi(value.title) &&
+    laSo(value.totalSeats) &&
+    laSo(value.price) &&
+    laSo(value.rowStart) &&
+    laSo(value.rowEnd)
+  );
+}
+
+function laDanhSachFareReadonlyItem(value: unknown): value is BackofficeFareReadonlyItem[] {
+  return Array.isArray(value) && value.every(laFareReadonlyItem);
+}
+
 function laFlightItem(value: unknown): value is BackofficeOperationsFlightItem {
   return (
     laBanGhi(value) &&
@@ -132,7 +154,9 @@ function laFlightItem(value: unknown): value is BackofficeOperationsFlightItem {
     laChuoi(value.statusLabel) &&
     laChuoi(value.gate) &&
     laChuoi(value.note) &&
-    laBoolean(value.salesOpen)
+    laBoolean(value.salesOpen) &&
+    laSo(value.baseFare) &&
+    laDanhSachFareReadonlyItem(value.fareSummaries)
   );
 }
 

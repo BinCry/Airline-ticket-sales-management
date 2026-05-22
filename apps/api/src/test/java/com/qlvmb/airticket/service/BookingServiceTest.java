@@ -3,6 +3,7 @@ package com.qlvmb.airticket.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -23,6 +24,7 @@ import com.qlvmb.airticket.domain.entity.RefundRequestEntity;
 import com.qlvmb.airticket.domain.entity.TicketEntity;
 import com.qlvmb.airticket.exception.BadRequestException;
 import com.qlvmb.airticket.repository.BookingRepository;
+import com.qlvmb.airticket.repository.BookingSeatSelectionRepository;
 import com.qlvmb.airticket.repository.FlightFareInventoryRepository;
 import com.qlvmb.airticket.repository.TicketRepository;
 import java.time.LocalDate;
@@ -45,6 +47,9 @@ class BookingServiceTest {
   private BookingRepository bookingRepository;
 
   @Mock
+  private BookingSeatSelectionRepository bookingSeatSelectionRepository;
+
+  @Mock
   private TicketRepository ticketRepository;
 
   @Mock
@@ -57,6 +62,7 @@ class BookingServiceTest {
     bookingService = new BookingService(
         flightFareInventoryRepository,
         bookingRepository,
+        bookingSeatSelectionRepository,
         ticketRepository,
         new ProductCatalogService(),
         memberVoucherService
@@ -68,6 +74,7 @@ class BookingServiceTest {
     FlightFareInventoryEntity inventory = mockInventory(20101L, 5, 1490000L, "pho_thong_tiet_kiem");
     when(flightFareInventoryRepository.lockByIds(List.of(20101L))).thenReturn(List.of(inventory));
     when(bookingRepository.lockExpiredHoldsByInventoryIds(any(), any(), any())).thenReturn(List.of());
+    when(bookingSeatSelectionRepository.findOccupiedSeatNumbersByFlightId(any(), any())).thenReturn(List.of());
     when(bookingRepository.existsByBookingCodeIgnoreCase(any())).thenReturn(false);
     when(bookingRepository.save(any(BookingEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -85,6 +92,7 @@ class BookingServiceTest {
     FlightFareInventoryEntity inventory = mockInventory(20101L, 0, 1490000L, "pho_thong_tiet_kiem");
     when(flightFareInventoryRepository.lockByIds(List.of(20101L))).thenReturn(List.of(inventory));
     when(bookingRepository.lockExpiredHoldsByInventoryIds(any(), any(), any())).thenReturn(List.of());
+    when(bookingSeatSelectionRepository.findOccupiedSeatNumbersByFlightId(any(), any())).thenReturn(List.of());
 
     assertThatThrownBy(() -> bookingService.createHold(oneWayHoldRequest(List.of(), List.of(20101L))))
         .isInstanceOf(BadRequestException.class)
@@ -96,6 +104,7 @@ class BookingServiceTest {
     FlightFareInventoryEntity inventory = mockInventory(20101L, 5, 1490000L, "pho_thong_tiet_kiem");
     when(flightFareInventoryRepository.lockByIds(List.of(20101L))).thenReturn(List.of(inventory));
     when(bookingRepository.lockExpiredHoldsByInventoryIds(any(), any(), any())).thenReturn(List.of());
+    when(bookingSeatSelectionRepository.findOccupiedSeatNumbersByFlightId(any(), any())).thenReturn(List.of());
     when(bookingRepository.existsByBookingCodeIgnoreCase(any())).thenReturn(true, false);
     when(bookingRepository.save(any(BookingEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -110,22 +119,157 @@ class BookingServiceTest {
     FlightFareInventoryEntity inventory = mockInventory(20101L, 5, 1490000L, "pho_thong_tiet_kiem");
     when(flightFareInventoryRepository.lockByIds(List.of(20101L))).thenReturn(List.of(inventory));
     when(bookingRepository.lockExpiredHoldsByInventoryIds(any(), any(), any())).thenReturn(List.of());
+    when(bookingSeatSelectionRepository.findOccupiedSeatNumbersByFlightId(any(), any())).thenReturn(List.of());
     when(bookingRepository.existsByBookingCodeIgnoreCase(any())).thenReturn(false);
     when(bookingRepository.save(any(BookingEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
     BookingHoldResponse response = bookingService.createHold(
         oneWayHoldRequest(
             List.of(
-                new BookingHoldRequest.AncillaryRequest("SEAT_PLUS", 1),
-                new BookingHoldRequest.AncillaryRequest("BAG_23", 1)
+                new BookingHoldRequest.AncillaryRequest("BAG_23", 1),
+                new BookingHoldRequest.AncillaryRequest("MEAL_VN", 1)
             ),
             List.of(20101L)
         )
     );
 
     assertThat(response.selectedAncillaries()).hasSize(2);
-    assertThat(response.priceSummary().ancillaryAmount()).isEqualTo(610000L);
-    assertThat(response.priceSummary().totalAmount()).isEqualTo(2100000L);
+    assertThat(response.priceSummary().ancillaryAmount()).isEqualTo(470000L);
+    assertThat(response.priceSummary().totalAmount()).isEqualTo(1960000L);
+  }
+
+  @Test
+  void createHold_shouldAllowNhieuHanhKhachKhacHangVeTrenCungMotChuyenBay() {
+    FlightFareInventoryEntity saverInventory = mockInventoryOnFlight(
+        20101L,
+        501L,
+        "VN501",
+        9,
+        1200000L,
+        "pho_thong_tiet_kiem"
+    );
+    FlightFareInventoryEntity flexInventory = mockInventoryOnFlight(
+        20102L,
+        501L,
+        "VN501",
+        6,
+        1700000L,
+        "pho_thong_linh_hoat"
+    );
+    FlightFareInventoryEntity businessInventory = mockInventoryOnFlight(
+        20103L,
+        501L,
+        "VN501",
+        4,
+        2200000L,
+        "thuong_gia"
+    );
+
+    when(flightFareInventoryRepository.lockByIds(List.of(20101L, 20102L, 20103L)))
+        .thenReturn(List.of(saverInventory, flexInventory, businessInventory));
+    when(bookingRepository.lockExpiredHoldsByInventoryIds(any(), any(), any())).thenReturn(List.of());
+    when(bookingSeatSelectionRepository.findOccupiedSeatNumbersByFlightId(any(), any())).thenReturn(List.of());
+    when(bookingRepository.existsByBookingCodeIgnoreCase(any())).thenReturn(false);
+    when(bookingRepository.save(any(BookingEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    BookingHoldResponse response = bookingService.createHold(bookingHoldChoNhieuHanhKhachMotChieu());
+
+    assertThat(response.passengers()).hasSize(3);
+    assertThat(response.selectedSegments())
+        .extracting(BookingHoldResponse.SelectedSegmentResponse::fareFamily)
+        .containsExactly("thuong_gia", "pho_thong_linh_hoat", "pho_thong_tiet_kiem");
+    assertThat(response.selectedSegments())
+        .extracting(BookingHoldResponse.SelectedSegmentResponse::passengerCount)
+        .containsExactly(1, 1, 1);
+    assertThat(response.priceSummary().totalAmount()).isEqualTo(5100000L);
+    verify(saverInventory).reserveSeats(1);
+    verify(flexInventory).reserveSeats(1);
+    verify(businessInventory).reserveSeats(1);
+  }
+
+  @Test
+  void createHold_shouldAllowKhuHoiNhieuHanhKhachVaChoPhepTrungSoGheKhacChuyenBay() {
+    FlightFareInventoryEntity outboundSaverInventory = mockInventoryOnFlight(
+        30101L,
+        601L,
+        "VN601",
+        8,
+        1200000L,
+        "pho_thong_tiet_kiem"
+    );
+    FlightFareInventoryEntity outboundFlexInventory = mockInventoryOnFlight(
+        30102L,
+        601L,
+        "VN601",
+        6,
+        1700000L,
+        "pho_thong_linh_hoat"
+    );
+    FlightFareInventoryEntity returnSaverInventory = mockInventoryOnFlight(
+        30201L,
+        701L,
+        "VN701",
+        8,
+        1250000L,
+        "pho_thong_tiet_kiem"
+    );
+    FlightFareInventoryEntity returnFlexInventory = mockInventoryOnFlight(
+        30202L,
+        701L,
+        "VN701",
+        6,
+        1750000L,
+        "pho_thong_linh_hoat"
+    );
+
+    when(flightFareInventoryRepository.lockByIds(argThat(ids ->
+        ids != null
+            && ids.size() == 4
+            && ids.containsAll(List.of(30101L, 30102L, 30201L, 30202L))
+    )))
+        .thenReturn(List.of(
+            outboundSaverInventory,
+            outboundFlexInventory,
+            returnSaverInventory,
+            returnFlexInventory
+        ));
+    when(bookingRepository.lockExpiredHoldsByInventoryIds(any(), any(), any())).thenReturn(List.of());
+    when(bookingSeatSelectionRepository.findOccupiedSeatNumbersByFlightId(any(), any())).thenReturn(List.of());
+    when(bookingRepository.existsByBookingCodeIgnoreCase(any())).thenReturn(false);
+    when(bookingRepository.save(any(BookingEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    BookingHoldResponse response = bookingService.createHold(bookingHoldKhuHoiNhieuHanhKhach());
+
+    assertThat(response.selectedSegments()).hasSize(4);
+    assertThat(response.selectedSegments())
+        .extracting(
+            BookingHoldResponse.SelectedSegmentResponse::code,
+            BookingHoldResponse.SelectedSegmentResponse::fareFamily,
+            BookingHoldResponse.SelectedSegmentResponse::passengerCount
+        )
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple("VN601", "pho_thong_linh_hoat", 1),
+            org.assertj.core.groups.Tuple.tuple("VN601", "pho_thong_tiet_kiem", 1),
+            org.assertj.core.groups.Tuple.tuple("VN701", "pho_thong_linh_hoat", 1),
+            org.assertj.core.groups.Tuple.tuple("VN701", "pho_thong_tiet_kiem", 1)
+        );
+    assertThat(response.priceSummary().totalAmount()).isEqualTo(5900000L);
+    verify(outboundSaverInventory).reserveSeats(1);
+    verify(outboundFlexInventory).reserveSeats(1);
+    verify(returnSaverInventory).reserveSeats(1);
+    verify(returnFlexInventory).reserveSeats(1);
+  }
+
+  @Test
+  void createHold_shouldRejectSeatPlusForBookingMoi() {
+    assertThatThrownBy(() -> bookingService.createHold(
+        oneWayHoldRequest(
+            List.of(new BookingHoldRequest.AncillaryRequest("SEAT_PLUS", 1)),
+            List.of(20101L)
+        )
+    ))
+        .isInstanceOf(BadRequestException.class)
+        .hasMessage("Ghế ưu tiên không còn được bán riêng trong luồng đặt vé này.");
   }
 
   @Test
@@ -185,11 +329,6 @@ class BookingServiceTest {
       List<BookingHoldRequest.AncillaryRequest> ancillaries,
       List<Long> inventoryIds
   ) {
-    List<BookingHoldRequest.SeatSelectionRequest> seatSelections = ancillaries.stream()
-        .anyMatch(ancillary -> "SEAT_PLUS".equalsIgnoreCase(ancillary.code()))
-        ? List.of(new BookingHoldRequest.SeatSelectionRequest(inventoryIds.get(0), 0, "12A"))
-        : List.of();
-
     return new BookingHoldRequest(
         "one_way",
         new BookingHoldRequest.ContactRequest(
@@ -210,7 +349,86 @@ class BookingServiceTest {
             .map(BookingHoldRequest.SegmentRequest::new)
             .toList(),
         ancillaries,
-        seatSelections
+        List.of(new BookingHoldRequest.SeatSelectionRequest(inventoryIds.get(0), 0, 0, "9A"))
+    );
+  }
+
+  private BookingHoldRequest bookingHoldChoNhieuHanhKhachMotChieu() {
+    return new BookingHoldRequest(
+        "one_way",
+        new BookingHoldRequest.ContactRequest(
+            "Nguyen Van Dat Cho",
+            "dat-cho@example.com",
+            "0912345678"
+        ),
+        List.of(
+            new BookingHoldRequest.PassengerRequest(
+                "Nguyen Van A",
+                "adult",
+                LocalDate.of(1990, 1, 10),
+                "CCCD",
+                "079123456781"
+            ),
+            new BookingHoldRequest.PassengerRequest(
+                "Tran Thi B",
+                "adult",
+                LocalDate.of(1992, 3, 14),
+                "CCCD",
+                "079123456782"
+            ),
+            new BookingHoldRequest.PassengerRequest(
+                "Le Van C",
+                "child",
+                LocalDate.of(2015, 8, 20),
+                "Giấy khai sinh",
+                "KS20150820"
+            )
+        ),
+        List.of(new BookingHoldRequest.SegmentRequest(null, 501L)),
+        List.of(),
+        List.of(
+            new BookingHoldRequest.SeatSelectionRequest(20101L, 0, 0, "9A"),
+            new BookingHoldRequest.SeatSelectionRequest(20102L, 1, 0, "3A"),
+            new BookingHoldRequest.SeatSelectionRequest(20103L, 2, 0, "1A")
+        )
+    );
+  }
+
+  private BookingHoldRequest bookingHoldKhuHoiNhieuHanhKhach() {
+    return new BookingHoldRequest(
+        "round_trip",
+        new BookingHoldRequest.ContactRequest(
+            "Nguoi Dat Khu Hoi",
+            "khu-hoi@example.com",
+            "0912345678"
+        ),
+        List.of(
+            new BookingHoldRequest.PassengerRequest(
+                "Nguyen Van A",
+                "adult",
+                LocalDate.of(1990, 1, 10),
+                "CCCD",
+                "079123456781"
+            ),
+            new BookingHoldRequest.PassengerRequest(
+                "Le Thi B",
+                "child",
+                LocalDate.of(2014, 6, 9),
+                "Giấy khai sinh",
+                "KS20140609"
+            )
+        ),
+        List.of(
+            new BookingHoldRequest.SegmentRequest(null, 601L),
+            new BookingHoldRequest.SegmentRequest(null, 701L)
+        ),
+        List.of(),
+        List.of(
+            new BookingHoldRequest.SeatSelectionRequest(30101L, 0, 0, "9A"),
+            new BookingHoldRequest.SeatSelectionRequest(30102L, 1, 0, "3A"),
+            new BookingHoldRequest.SeatSelectionRequest(30202L, 0, 1, "3B"),
+            new BookingHoldRequest.SeatSelectionRequest(30201L, 1, 1, "9A")
+        )
     );
   }
 
@@ -351,6 +569,17 @@ class BookingServiceTest {
       long price,
       String fareFamily
   ) {
+    return mockInventoryOnFlight(inventoryId, inventoryId, "AU201", availableSeats, price, fareFamily);
+  }
+
+  private FlightFareInventoryEntity mockInventoryOnFlight(
+      long inventoryId,
+      long flightId,
+      String flightCode,
+      int availableSeats,
+      long price,
+      String fareFamily
+  ) {
     FlightFareInventoryEntity inventory = mock(FlightFareInventoryEntity.class);
     FlightEntity flight = mock(FlightEntity.class);
     AirportEntity originAirport = mock(AirportEntity.class);
@@ -360,7 +589,8 @@ class BookingServiceTest {
     lenient().when(originAirport.getCityName()).thenReturn("Thanh pho Ho Chi Minh");
     lenient().when(destinationAirport.getCode()).thenReturn("HAN");
     lenient().when(destinationAirport.getCityName()).thenReturn("Ha Noi");
-    lenient().when(flight.getCode()).thenReturn("AU201");
+    lenient().when(flight.getId()).thenReturn(flightId);
+    lenient().when(flight.getCode()).thenReturn(flightCode);
     lenient().when(flight.getOriginAirport()).thenReturn(originAirport);
     lenient().when(flight.getDestinationAirport()).thenReturn(destinationAirport);
     lenient().when(flight.getDepartureAt()).thenReturn(OffsetDateTime.parse("2026-03-20T06:10:00+07:00"));

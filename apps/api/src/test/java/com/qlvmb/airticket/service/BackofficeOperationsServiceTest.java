@@ -11,6 +11,7 @@ import com.qlvmb.airticket.domain.dto.BackofficeFlightOperationsResponse;
 import com.qlvmb.airticket.domain.entity.AirportEntity;
 import com.qlvmb.airticket.domain.entity.AuditLogEntity;
 import com.qlvmb.airticket.domain.entity.FlightEntity;
+import com.qlvmb.airticket.domain.entity.FlightFareInventoryEntity;
 import com.qlvmb.airticket.domain.entity.UserAccountEntity;
 import com.qlvmb.airticket.repository.AirportRepository;
 import com.qlvmb.airticket.repository.AuditLogRepository;
@@ -53,9 +54,6 @@ class BackofficeOperationsServiceTest {
   private AuditLogRepository auditLogRepository;
 
   @Mock
-  private ProductCatalogService productCatalogService;
-
-  @Mock
   private NotificationOutboxService notificationOutboxService;
 
   private BackofficeOperationsService backofficeOperationsService;
@@ -69,7 +67,7 @@ class BackofficeOperationsServiceTest {
         memberVoucherRepository,
         userAccountRepository,
         auditLogRepository,
-        productCatalogService,
+        new ProductCatalogService(),
         notificationOutboxService
     );
   }
@@ -95,7 +93,7 @@ class BackofficeOperationsServiceTest {
     BackofficeFlightOperationsResponse.FlightItem item = backofficeOperationsService.updateFlight(
         actor(),
         18L,
-        new BackofficeFlightOperationUpdateRequest("delayed", "g8", "Tre do dieu phoi tau bay.", false)
+        new BackofficeFlightOperationUpdateRequest("delayed", "g8", "Tre do dieu phoi tau bay.", false, null)
     );
 
     assertThat(item.status()).isEqualTo("delayed");
@@ -138,9 +136,6 @@ class BackofficeOperationsServiceTest {
     when(flightRepository.existsByCodeIgnoreCase("VN6201")).thenReturn(false);
     when(airportRepository.findByCodeIgnoreCase("SGN")).thenReturn(Optional.of(originAirport));
     when(airportRepository.findByCodeIgnoreCase("HAN")).thenReturn(Optional.of(destinationAirport));
-    when(productCatalogService.normalizeFareFamily("pho_thong_tiet_kiem")).thenReturn("pho_thong_tiet_kiem");
-    when(productCatalogService.requireFareMeta("pho_thong_tiet_kiem"))
-        .thenReturn(new ProductCatalogService.FareMeta("Pho thong tiet kiem", List.of("7kg")));
     when(auditLogRepository.save(any(AuditLogEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
     when(flightRepository.save(any(FlightEntity.class))).thenAnswer(invocation -> {
       FlightEntity saved = invocation.getArgument(0);
@@ -157,7 +152,7 @@ class BackofficeOperationsServiceTest {
         "g12",
         "Chuyen bay bo sung.",
         true,
-        List.of(new BackofficeFlightCreateRequest.FareInventoryItem("pho_thong_tiet_kiem", 40, 1200000L))
+        1200000L
     );
 
     BackofficeFlightOperationsResponse.FlightItem item = backofficeOperationsService.createFlight(actor(), request);
@@ -251,6 +246,11 @@ class BackofficeOperationsServiceTest {
     ReflectionTestUtils.setField(flight, "salesOpen", true);
     ReflectionTestUtils.setField(flight, "hiddenAt", null);
     ReflectionTestUtils.setField(flight, "cancelledAt", null);
+    ReflectionTestUtils.setField(flight, "fareInventories", new java.util.ArrayList<>(List.of(
+        FlightFareInventoryEntity.create(flight, ProductCatalogService.FARE_SAVER, 120, 1_200_000L),
+        FlightFareInventoryEntity.create(flight, ProductCatalogService.FARE_FLEX, 36, 1_700_000L),
+        FlightFareInventoryEntity.create(flight, ProductCatalogService.FARE_BUSINESS, 12, 2_200_000L)
+    )));
     return flight;
   }
 

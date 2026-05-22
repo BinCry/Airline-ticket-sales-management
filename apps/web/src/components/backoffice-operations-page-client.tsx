@@ -15,7 +15,7 @@ import {
   hideBackofficeOperationsVoucher,
   hideCancelledBackofficeOperationsFlight,
   revokeBackofficeOperationsVoucher,
-  type BackofficeFlightFareInventoryInput,
+  type BackofficeFareReadonlyItem,
   type BackofficeOperationsFlightCreateInput,
   type BackofficeOperationsFlightItem,
   type BackofficeOperationsUpdateInput,
@@ -66,10 +66,10 @@ const VOUCHER_EDITABLE_STATUS_OPTIONS = [
   { value: "REVOKED", label: "Đã thu hồi" }
 ] as const;
 
-const FARE_FAMILY_OPTIONS = [
-  { value: "pho_thong_tiet_kiem", label: "Phổ thông tiết kiệm" },
-  { value: "pho_thong_linh_hoat", label: "Phổ thông linh hoạt" },
-  { value: "thuong_gia", label: "Thương gia" }
+const HANG_VE_CO_DINH = [
+  { fareFamily: "pho_thong_tiet_kiem", title: "Phổ thông tiết kiệm", totalSeats: 120, rowStart: 9, rowEnd: 28, priceOffset: 0 },
+  { fareFamily: "pho_thong_linh_hoat", title: "Phổ thông linh hoạt", totalSeats: 36, rowStart: 3, rowEnd: 8, priceOffset: 500000 },
+  { fareFamily: "thuong_gia", title: "Thương gia", totalSeats: 12, rowStart: 1, rowEnd: 2, priceOffset: 1000000 }
 ] as const;
 
 function formatDateTime(value: string) {
@@ -161,14 +161,6 @@ function createDefaultFlightArrivalValue() {
   return toDateTimeLocalValue(currentDate.toISOString());
 }
 
-function createEmptyFareInventory(): BackofficeFlightFareInventoryInput {
-  return {
-    fareFamily: FARE_FAMILY_OPTIONS[0].value,
-    totalSeats: 40,
-    price: 1200000
-  };
-}
-
 function createEmptyFlightForm(): BackofficeOperationsFlightCreateInput {
   return {
     code: "",
@@ -179,7 +171,7 @@ function createEmptyFlightForm(): BackofficeOperationsFlightCreateInput {
     gate: "",
     note: "",
     salesOpen: true,
-    fareInventories: [createEmptyFareInventory()]
+    baseFare: 1200000
   };
 }
 
@@ -200,8 +192,29 @@ function buildFlightDraft(flight: BackofficeOperationsFlightItem): BackofficeOpe
     status: flight.status,
     gate: flight.gate,
     note: flight.note,
-    salesOpen: flight.salesOpen
+    salesOpen: flight.salesOpen,
+    baseFare: flight.baseFare
   };
+}
+
+function taoDanhSachHangVeCoDinh(baseFare: number): BackofficeFareReadonlyItem[] {
+  return HANG_VE_CO_DINH.map((fare) => ({
+    fareFamily: fare.fareFamily,
+    title: fare.title,
+    totalSeats: fare.totalSeats,
+    rowStart: fare.rowStart,
+    rowEnd: fare.rowEnd,
+    price: baseFare + fare.priceOffset
+  }));
+}
+
+function capNhatGiaGocHopLe(value: string, giaMacDinh: number): number {
+  const giaDaNhap = Number(value);
+  if (!Number.isFinite(giaDaNhap) || giaDaNhap < 1) {
+    return giaMacDinh;
+  }
+
+  return Math.round(giaDaNhap);
 }
 
 function buildVoucherDraft(voucher: BackofficeVoucherItem): BackofficeVoucherUpdateInput {
@@ -308,41 +321,6 @@ export function BackofficeOperationsPageClient() {
     }));
   }
 
-  function updateFlightFareRow(
-    index: number,
-    key: keyof BackofficeFlightFareInventoryInput,
-    value: string | number
-  ) {
-    setFlightForm((current) => ({
-      ...current,
-      fareInventories: current.fareInventories.map((item, itemIndex) =>
-        itemIndex === index
-          ? {
-              ...item,
-              [key]: value
-            }
-          : item
-      )
-    }));
-  }
-
-  function addFlightFareRow() {
-    setFlightForm((current) => ({
-      ...current,
-      fareInventories: [...current.fareInventories, createEmptyFareInventory()]
-    }));
-  }
-
-  function removeFlightFareRow(index: number) {
-    setFlightForm((current) => ({
-      ...current,
-      fareInventories:
-        current.fareInventories.length <= 1
-          ? current.fareInventories
-          : current.fareInventories.filter((_, itemIndex) => itemIndex !== index)
-    }));
-  }
-
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!accessToken || pendingFlightAction !== null) {
@@ -369,11 +347,7 @@ export function BackofficeOperationsPageClient() {
           note: flightForm.note.trim(),
           departureAt: toApiDateTimeValue(flightForm.departureAt),
           arrivalAt: toApiDateTimeValue(flightForm.arrivalAt),
-          fareInventories: flightForm.fareInventories.map((item) => ({
-            fareFamily: item.fareFamily.trim(),
-            totalSeats: Number(item.totalSeats),
-            price: Number(item.price)
-          }))
+          baseFare: Number(flightForm.baseFare)
         },
         accessToken
       );
@@ -629,7 +603,7 @@ export function BackofficeOperationsPageClient() {
             <SectionHeading
               eyebrow="Tạo chuyến mới"
               title="Bổ sung chuyến bay vào hệ thống khai thác"
-              description="Nhập mã chuyến, sân bay đi đến, thời gian và các hạng vé để mở bán chuyến mới."
+              description="Nhập mã chuyến, sân bay đi đến, thời gian và giá gốc Phổ thông tiết kiệm. Hệ thống sẽ tự suy ra 3 hạng vé cố định."
             />
             <div className="field-grid compact-grid">
               <label className="field">
@@ -680,6 +654,17 @@ export function BackofficeOperationsPageClient() {
                   placeholder="Ví dụ: G8"
                 />
               </label>
+              <label className="field">
+                <span>Giá gốc Phổ thông tiết kiệm</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={flightForm.baseFare}
+                  onChange={(event) =>
+                    updateFlightFormField("baseFare", capNhatGiaGocHopLe(event.target.value, flightForm.baseFare))
+                  }
+                />
+              </label>
               <label className="field result-grid-span-full">
                 <span>Ghi chú vận hành</span>
                 <textarea
@@ -703,71 +688,32 @@ export function BackofficeOperationsPageClient() {
               </label>
 
               <div className="stack-list">
-                {flightForm.fareInventories.map((fareInventory, index) => (
-                  <article key={`fare-${index}`} className="surface-card admin-nested-card">
+                {taoDanhSachHangVeCoDinh(flightForm.baseFare).map((fareInventory) => (
+                  <article key={fareInventory.fareFamily} className="surface-card admin-nested-card">
                     <div className="field-grid compact-grid">
                       <label className="field">
-                        <span>Hạng vé</span>
-                        <select
-                          value={fareInventory.fareFamily}
-                          onChange={(event) =>
-                            updateFlightFareRow(index, "fareFamily", event.target.value)
-                          }
-                        >
-                          {FARE_FAMILY_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
+                        <span>Hạng vé cố định</span>
+                        <input value={fareInventory.title} disabled />
                       </label>
                       <label className="field">
-                        <span>Tổng ghế</span>
-                        <input
-                          type="number"
-                          min={1}
-                          value={fareInventory.totalSeats}
-                          onChange={(event) =>
-                            updateFlightFareRow(index, "totalSeats", Number(event.target.value))
-                          }
-                        />
+                        <span>Số ghế cố định</span>
+                        <input value={fareInventory.totalSeats} disabled />
+                      </label>
+                      <label className="field">
+                        <span>Vùng ghế</span>
+                        <input value={`Hàng ${fareInventory.rowStart}-${fareInventory.rowEnd}`} disabled />
                       </label>
                       <label className="field">
                         <span>Giá vé</span>
-                        <input
-                          type="number"
-                          min={1}
-                          value={fareInventory.price}
-                          onChange={(event) =>
-                            updateFlightFareRow(index, "price", Number(event.target.value))
-                          }
-                        />
+                        <input value={formatCurrency(fareInventory.price)} disabled />
                       </label>
-                    </div>
-                    <div className="finance-action-row operations-fare-row-actions">
-                      <button
-                        type="button"
-                        className="button button-secondary"
-                        onClick={addFlightFareRow}
-                      >
-                        Thêm hạng vé
-                      </button>
-                      <button
-                        type="button"
-                        className="button button-secondary"
-                        onClick={() => removeFlightFareRow(index)}
-                        disabled={flightForm.fareInventories.length <= 1}
-                      >
-                        Xóa hạng vé này
-                      </button>
                     </div>
                   </article>
                 ))}
               </div>
 
               <small className="finance-muted-action operations-fare-note">
-                Hạng vé đang quản lý theo quota tồn ghế trên từng mã hạng. Sơ đồ chọn ghế hiển thị cho khách là sơ đồ chung
-                và được kiểm soát theo tồn ghế đã khai báo.
+                Quota và vùng ghế của 3 hạng vé được cố định trong hệ thống để đồng bộ với giao diện đặt vé của hành khách.
               </small>
 
               <button
@@ -849,6 +795,10 @@ export function BackofficeOperationsPageClient() {
                       <span>Cửa ra tàu hiện tại</span>
                       <strong>{flight.gate}</strong>
                     </div>
+                    <div>
+                      <span>Giá gốc hiện tại</span>
+                      <strong>{formatCurrency(flight.baseFare)}</strong>
+                    </div>
                   </div>
 
                   <div className="field-grid compact-grid">
@@ -891,6 +841,24 @@ export function BackofficeOperationsPageClient() {
                         disabled={isWorking}
                       />
                     </label>
+                    <label className="field">
+                      <span>Giá gốc Phổ thông tiết kiệm</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={draft?.baseFare ?? flight.baseFare}
+                        onChange={(event) =>
+                          setDrafts((current) => ({
+                            ...current,
+                            [flight.flightId]: {
+                              ...(draft ?? buildFlightDraft(flight)),
+                              baseFare: capNhatGiaGocHopLe(event.target.value, draft?.baseFare ?? flight.baseFare)
+                            }
+                          }))
+                        }
+                        disabled={isWorking}
+                      />
+                    </label>
 
                     <label className="field result-grid-span-full">
                       <span>Ghi chú vận hành</span>
@@ -910,6 +878,31 @@ export function BackofficeOperationsPageClient() {
                         disabled={isWorking}
                       />
                     </label>
+                  </div>
+
+                  <div className="stack-list">
+                    {flight.fareSummaries.map((fareSummary) => (
+                      <article key={`${flight.flightId}-${fareSummary.fareFamily}`} className="surface-card admin-nested-card">
+                        <div className="field-grid compact-grid">
+                          <label className="field">
+                            <span>Hạng vé</span>
+                            <input value={fareSummary.title} disabled />
+                          </label>
+                          <label className="field">
+                            <span>Số ghế cố định</span>
+                            <input value={fareSummary.totalSeats} disabled />
+                          </label>
+                          <label className="field">
+                            <span>Vùng ghế</span>
+                            <input value={`Hàng ${fareSummary.rowStart}-${fareSummary.rowEnd}`} disabled />
+                          </label>
+                          <label className="field">
+                            <span>Giá đang bán</span>
+                            <input value={formatCurrency(fareSummary.price)} disabled />
+                          </label>
+                        </div>
+                      </article>
+                    ))}
                   </div>
 
                   <div className="booking-action-list">

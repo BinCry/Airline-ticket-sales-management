@@ -97,7 +97,7 @@ export const heroHighlights = [
 export const quickServices: QuickService[] = [
   {
     title: "Tìm chuyến bay",
-    subtitle: "Chọn chặng bay, ngày đi và hạng vé theo nhu cầu thực tế.",
+    subtitle: "Chọn chặng bay, ngày đi và xem giá mở đầu trước khi sang bước đặt chỗ.",
     href: "/search"
   },
   {
@@ -211,7 +211,7 @@ export const supportFaqs: FaqEntry[] = [
 export const bookingSteps: BookingStep[] = [
   {
     title: "Chọn chuyến bay",
-    description: "Tìm chặng bay phù hợp theo ngày đi, điểm đến và hạng vé.",
+    description: "Tìm chặng bay phù hợp theo ngày đi, điểm đến và giá mở đầu của hành trình.",
     status: "done"
   },
   {
@@ -221,7 +221,7 @@ export const bookingSteps: BookingStep[] = [
   },
   {
     title: "Dịch vụ bổ trợ",
-    description: "Bổ sung hành lý, chỗ ngồi và các tiện ích trước khi thanh toán.",
+    description: "Bổ sung hành lý và kiểm tra các tiện ích còn được áp dụng trước khi thanh toán.",
     status: "upcoming"
   },
   {
@@ -253,12 +253,6 @@ export const fareComparisons: FareComparison[] = [
 ];
 
 export const ancillaries: AncillaryService[] = [
-  {
-    code: "SEAT_PLUS",
-    name: "Ghế hàng đầu",
-    description: "Tăng không gian để chân và thuận tiện hơn khi lên hoặc xuống tàu bay.",
-    price: 320000
-  },
   {
     code: "BAG_23",
     name: "Hành lý ký gửi 23kg",

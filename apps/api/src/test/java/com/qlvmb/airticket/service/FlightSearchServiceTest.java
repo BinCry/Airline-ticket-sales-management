@@ -16,15 +16,19 @@ import com.qlvmb.airticket.domain.entity.FlightFareInventoryEntity;
 import com.qlvmb.airticket.domain.mapper.FlightSearchMapper;
 import com.qlvmb.airticket.exception.BadRequestException;
 import com.qlvmb.airticket.repository.AirportRepository;
+import com.qlvmb.airticket.repository.BookingSeatSelectionRepository;
 import com.qlvmb.airticket.repository.FlightRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.BeanUtils;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class FlightSearchServiceTest {
@@ -35,12 +39,16 @@ class FlightSearchServiceTest {
   @Mock
   private FlightRepository flightRepository;
 
+  @Mock
+  private BookingSeatSelectionRepository bookingSeatSelectionRepository;
+
   private FlightSearchService flightSearchService;
 
   @BeforeEach
   void setUp() {
     flightSearchService = new FlightSearchService(
         airportRepository,
+        bookingSeatSelectionRepository,
         flightRepository,
         new ProductCatalogService(),
         new FlightSearchMapper()
@@ -70,7 +78,6 @@ class FlightSearchServiceTest {
         LocalDate.of(2026, 3, 20),
         null,
         "one_way",
-        null,
         1,
         0,
         0
@@ -120,7 +127,6 @@ class FlightSearchServiceTest {
         LocalDate.of(2026, 3, 20),
         LocalDate.of(2026, 3, 23),
         "round_trip",
-        null,
         1,
         0,
         0
@@ -129,12 +135,12 @@ class FlightSearchServiceTest {
     assertThat(response.outboundFlights()).hasSize(1);
     assertThat(response.returnFlights()).hasSize(1);
     assertThat(response.flights()).hasSize(2);
-    assertThat(response.fares()).hasSize(1);
+    assertThat(response.fares()).hasSize(3);
     assertThat(response.criteria().returnDate()).isEqualTo("2026-03-23");
   }
 
   @Test
-  void searchFlights_shouldFilterByFareFamily() {
+  void searchFlights_shouldReturnFareOptionsTheoChuyenBay() {
     mockAirportExists("SGN", "HAN");
     FlightEntity outboundFlight = mockFlight(
         233L,
@@ -147,7 +153,7 @@ class FlightSearchServiceTest {
         "2026-03-20T20:35:00+07:00",
         "scheduled",
         List.of(
-            mockInventoryForFilterOnly("pho_thong_tiet_kiem"),
+            mockInventory(2004L, "pho_thong_tiet_kiem", 9, 1490000L),
             mockInventory(2005L, "thuong_gia", 3, 3490000L)
         )
     );
@@ -159,15 +165,74 @@ class FlightSearchServiceTest {
         LocalDate.of(2026, 3, 20),
         null,
         "one_way",
-        "thuong_gia",
         1,
         0,
         0
     );
 
     assertThat(response.outboundFlights()).hasSize(1);
-    assertThat(response.outboundFlights().getFirst().fareFamily()).isEqualTo("thuong_gia");
-    assertThat(response.fares()).extracting(FlightSearchResponse.FareCard::fareFamily).containsExactly("thuong_gia");
+    assertThat(response.outboundFlights().getFirst().baseFare()).isEqualTo(1490000L);
+    assertThat(response.outboundFlights().getFirst().fares())
+        .extracting(FlightSearchResponse.FareOption::fareFamily)
+        .containsExactly("pho_thong_tiet_kiem", "thuong_gia");
+  }
+
+  @Test
+  void searchFlights_shouldReturnGiaThapNhatChoTungHangVe() {
+    mockAirportExists("SGN", "HAN");
+    FlightEntity firstFlight = mockFlight(
+        701L,
+        "AU701",
+        "SGN",
+        "Thanh pho Ho Chi Minh",
+        "HAN",
+        "Ha Noi",
+        "2026-03-20T07:00:00+07:00",
+        "2026-03-20T09:10:00+07:00",
+        "scheduled",
+        List.of(
+            mockInventory(2701L, "pho_thong_tiet_kiem", 12, 1490000L),
+            mockInventory(2702L, "pho_thong_linh_hoat", 8, 1990000L),
+            mockInventory(2703L, "thuong_gia", 3, 3490000L)
+        )
+    );
+    FlightEntity secondFlight = mockFlight(
+        702L,
+        "AU702",
+        "SGN",
+        "Thanh pho Ho Chi Minh",
+        "HAN",
+        "Ha Noi",
+        "2026-03-20T11:30:00+07:00",
+        "2026-03-20T13:40:00+07:00",
+        "scheduled",
+        List.of(
+            mockInventory(2711L, "pho_thong_tiet_kiem", 9, 1590000L),
+            mockInventory(2712L, "pho_thong_linh_hoat", 6, 2090000L),
+            mockInventory(2713L, "thuong_gia", 2, 3290000L)
+        )
+    );
+    when(flightRepository.searchRoute(eq("SGN"), eq("HAN"), any(), any()))
+        .thenReturn(List.of(firstFlight, secondFlight));
+
+    FlightSearchResponse response = flightSearchService.searchFlights(
+        "SGN",
+        "HAN",
+        LocalDate.of(2026, 3, 20),
+        null,
+        "one_way",
+        1,
+        0,
+        0
+    );
+
+    assertThat(response.fares())
+        .extracting(FlightSearchResponse.FareCard::fareFamily, FlightSearchResponse.FareCard::price)
+        .containsExactly(
+            org.assertj.core.groups.Tuple.tuple("pho_thong_tiet_kiem", 1490000L),
+            org.assertj.core.groups.Tuple.tuple("pho_thong_linh_hoat", 1990000L),
+            org.assertj.core.groups.Tuple.tuple("thuong_gia", 3290000L)
+        );
   }
 
   @Test
@@ -180,7 +245,6 @@ class FlightSearchServiceTest {
         LocalDate.of(2026, 3, 20),
         null,
         "one_way",
-        null,
         1,
         0,
         0
@@ -199,7 +263,6 @@ class FlightSearchServiceTest {
         LocalDate.of(2026, 3, 20),
         LocalDate.of(2026, 3, 19),
         "round_trip",
-        null,
         1,
         0,
         0
@@ -218,7 +281,6 @@ class FlightSearchServiceTest {
         LocalDate.of(2026, 3, 20),
         null,
         "one_way",
-        null,
         4,
         4,
         2
@@ -237,7 +299,6 @@ class FlightSearchServiceTest {
         LocalDate.of(2026, 3, 20),
         null,
         "one_way",
-        null,
         1,
         -1,
         0
@@ -269,14 +330,14 @@ class FlightSearchServiceTest {
         LocalDate.of(2026, 3, 20),
         null,
         "one_way",
-        null,
         1,
         0,
         0
     );
 
     assertThat(response.outboundFlights()).hasSize(1);
-    assertThat(response.outboundFlights().getFirst().seatsLeft()).isEqualTo(2);
+    assertThat(response.outboundFlights().getFirst().fares()).hasSize(1);
+    assertThat(response.outboundFlights().getFirst().fares().getFirst().seatsLeft()).isEqualTo(2);
   }
 
   private void mockAirportExists(String... airportCodes) {
@@ -297,18 +358,18 @@ class FlightSearchServiceTest {
       String status,
       List<FlightFareInventoryEntity> inventories
   ) {
-    FlightEntity flight = org.mockito.Mockito.mock(FlightEntity.class);
+    FlightEntity flight = BeanUtils.instantiateClass(FlightEntity.class);
     AirportEntity originAirport = mockAirport(originCode, originCity);
     AirportEntity destinationAirport = mockAirport(destinationCode, destinationCity);
-    when(flight.getId()).thenReturn(flightId);
-    when(flight.getCode()).thenReturn(flightCode);
-    when(flight.getOriginAirport()).thenReturn(originAirport);
-    when(flight.getDestinationAirport()).thenReturn(destinationAirport);
-    when(flight.getDepartureAt()).thenReturn(OffsetDateTime.parse(departureAt));
-    when(flight.getArrivalAt()).thenReturn(OffsetDateTime.parse(arrivalAt));
-    when(flight.getStatus()).thenReturn(status);
-    when(flight.isSalesOpen()).thenReturn(true);
-    when(flight.getFareInventories()).thenReturn(inventories);
+    ReflectionTestUtils.setField(flight, "id", flightId);
+    ReflectionTestUtils.setField(flight, "code", flightCode);
+    ReflectionTestUtils.setField(flight, "originAirport", originAirport);
+    ReflectionTestUtils.setField(flight, "destinationAirport", destinationAirport);
+    ReflectionTestUtils.setField(flight, "departureAt", OffsetDateTime.parse(departureAt));
+    ReflectionTestUtils.setField(flight, "arrivalAt", OffsetDateTime.parse(arrivalAt));
+    ReflectionTestUtils.setField(flight, "status", status);
+    ReflectionTestUtils.setField(flight, "salesOpen", true);
+    ReflectionTestUtils.setField(flight, "fareInventories", new ArrayList<>(inventories));
     for (FlightFareInventoryEntity inventory : inventories) {
       lenient().when(inventory.getFlight()).thenReturn(flight);
     }
@@ -339,12 +400,6 @@ class FlightSearchServiceTest {
     lenient().when(inventory.getTotalSeats()).thenReturn(totalSeats);
     when(inventory.getAvailableSeats()).thenReturn(availableSeats);
     when(inventory.getPrice()).thenReturn(price);
-    return inventory;
-  }
-
-  private FlightFareInventoryEntity mockInventoryForFilterOnly(String fareFamily) {
-    FlightFareInventoryEntity inventory = org.mockito.Mockito.mock(FlightFareInventoryEntity.class);
-    when(inventory.getFareFamily()).thenReturn(fareFamily);
     return inventory;
   }
 }

@@ -1,4 +1,4 @@
-import type { ApiFlightCard, FareFamily } from "@qlvmb/shared-types";
+import type { ApiFlightCard } from "@qlvmb/shared-types";
 
 import { formatCurrency } from "@/lib/format";
 
@@ -13,14 +13,12 @@ export interface SearchBudgetOption {
 
 export interface FlightSearchFilterState {
   budgetId: string | null;
-  fareFamilies: FareFamily[];
   minimumSeats: 0 | 1 | 5 | 10;
   timeSlots: SearchTimeSlot[];
 }
 
 export const DEFAULT_FLIGHT_SEARCH_FILTER_STATE: FlightSearchFilterState = {
   budgetId: null,
-  fareFamilies: [],
   minimumSeats: 0,
   timeSlots: []
 };
@@ -96,7 +94,7 @@ function taoNhanKhoangGia(min: number, max: number | null): string {
 }
 
 export function taoKhoangGiaDong(flights: ApiFlightCard[]): SearchBudgetOption[] {
-  const danhSachGia = [...new Set(flights.map((flight) => flight.price))].sort((a, b) => a - b);
+  const danhSachGia = [...new Set(flights.map((flight) => flight.baseFare))].sort((a, b) => a - b);
 
   if (danhSachGia.length === 0) {
     return [];
@@ -161,11 +159,10 @@ export function locDanhSachChuyenBay(
       return false;
     }
 
-    if (filterState.fareFamilies.length > 0 && !filterState.fareFamilies.includes(flight.fareFamily)) {
-      return false;
-    }
-
-    if (filterState.minimumSeats > 0 && flight.seatsLeft < filterState.minimumSeats) {
+    if (
+      filterState.minimumSeats > 0
+      && !flight.fares.some((fare) => fare.seatsLeft >= filterState.minimumSeats)
+    ) {
       return false;
     }
 
@@ -173,11 +170,11 @@ export function locDanhSachChuyenBay(
       return true;
     }
 
-    if (flight.price < khoangGiaDangChon.min) {
+    if (flight.baseFare < khoangGiaDangChon.min) {
       return false;
     }
 
-    if (khoangGiaDangChon.max !== null && flight.price > khoangGiaDangChon.max) {
+    if (khoangGiaDangChon.max !== null && flight.baseFare > khoangGiaDangChon.max) {
       return false;
     }
 

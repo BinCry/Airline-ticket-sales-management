@@ -19,6 +19,7 @@ import com.qlvmb.airticket.domain.entity.TicketEntity;
 import com.qlvmb.airticket.exception.BadRequestException;
 import com.qlvmb.airticket.exception.NotFoundException;
 import com.qlvmb.airticket.repository.BookingRepository;
+import com.qlvmb.airticket.repository.BookingSeatSelectionRepository;
 import com.qlvmb.airticket.repository.FlightFareInventoryRepository;
 import com.qlvmb.airticket.repository.TicketRepository;
 import com.qlvmb.airticket.security.AuthenticatedUser;
@@ -52,7 +53,7 @@ public class BookingService {
   private static final String INVENTORY_NOT_FOUND_MESSAGE = "Kh\u00f4ng t\u00ecm th\u1ea5y th\u00f4ng tin gh\u1ebf cho l\u1ef1a ch\u1ecdn \u0111\u00e3 ch\u1ecdn.";
   private static final String SEAT_SELECTION_INVALID_MESSAGE = "Th\u00f4ng tin gh\u1ebf \u0111\u00e3 ch\u1ecdn kh\u00f4ng h\u1ee3p l\u1ec7.";
   private static final String SEAT_SELECTION_DUPLICATE_MESSAGE = "Kh\u00f4ng \u0111\u01b0\u1ee3c ch\u1ecdn tr\u00f9ng gh\u1ebf cho c\u00f9ng m\u1ed9t ch\u1eb7ng bay.";
-  private static final String SEAT_SELECTION_MISMATCH_MESSAGE = "S\u1ed1 l\u01b0\u1ee3ng gh\u1ebf \u0111\u00e3 ch\u1ecdn ch\u01b0a kh\u1edbp v\u1edbi d\u1ecbch v\u1ee5 gh\u1ebf \u01b0u ti\u00ean.";
+  private static final String SEAT_SELECTION_MISMATCH_MESSAGE = "Mỗi hành khách cần chọn đúng một ghế cho từng chặng bay.";
   private static final String REFUND_NOT_AVAILABLE_MESSAGE = "\u0110\u1eb7t ch\u1ed7 hi\u1ec7n kh\u00f4ng th\u1ec3 g\u1eedi y\u00eau c\u1ea7u ho\u00e0n v\u00e9.";
   private static final String REFUND_AFTER_CHECKIN_MESSAGE = "Kh\u00f4ng th\u1ec3 g\u1eedi y\u00eau c\u1ea7u ho\u00e0n v\u00e9 sau khi \u0111\u00e3 l\u00e0m th\u1ee7 t\u1ee5c tr\u1ef1c tuy\u1ebfn.";
   private static final String REFUND_PENDING_MESSAGE = "Y\u00eau c\u1ea7u ho\u00e0n v\u00e9 cho m\u00e3 \u0111\u1eb7t ch\u1ed7 n\u00e0y \u0111ang ch\u1edd x\u1eed l\u00fd.";
@@ -64,6 +65,7 @@ public class BookingService {
 
   private final FlightFareInventoryRepository flightFareInventoryRepository;
   private final BookingRepository bookingRepository;
+  private final BookingSeatSelectionRepository bookingSeatSelectionRepository;
   private final TicketRepository ticketRepository;
   private final ProductCatalogService productCatalogService;
   private final MemberVoucherService memberVoucherService;
@@ -72,12 +74,14 @@ public class BookingService {
   public BookingService(
       FlightFareInventoryRepository flightFareInventoryRepository,
       BookingRepository bookingRepository,
+      BookingSeatSelectionRepository bookingSeatSelectionRepository,
       TicketRepository ticketRepository,
       ProductCatalogService productCatalogService,
       MemberVoucherService memberVoucherService
   ) {
     this.flightFareInventoryRepository = flightFareInventoryRepository;
     this.bookingRepository = bookingRepository;
+    this.bookingSeatSelectionRepository = bookingSeatSelectionRepository;
     this.ticketRepository = ticketRepository;
     this.productCatalogService = productCatalogService;
     this.memberVoucherService = memberVoucherService;
@@ -90,9 +94,7 @@ public class BookingService {
 
     int passengerCount = request.passengers().size();
     OffsetDateTime currentTime = OffsetDateTime.now();
-    List<Long> inventoryIds = request.segments().stream()
-        .map(BookingHoldRequest.SegmentRequest::inventoryId)
-        .toList();
+    List<Long> inventoryIds = collectReferencedInventoryIds(request);
 
     List<FlightFareInventoryEntity> lockedInventories =
         new ArrayList<>(flightFareInventoryRepository.lockByIds(inventoryIds));
@@ -102,29 +104,26 @@ public class BookingService {
     }
 
     Map<Long, FlightFareInventoryEntity> inventoryById = reconcileExpiredHolds(currentTime, lockedInventories);
-    List<PreparedSegment> preparedSegments = new ArrayList<>();
-
-    for (Long inventoryId : inventoryIds) {
-      FlightFareInventoryEntity inventory = inventoryById.get(inventoryId);
-      if (inventory == null) {
-        throw new BadRequestException(INVENTORY_NOT_FOUND_MESSAGE);
-      }
-      if (inventory.getAvailableSeats() < passengerCount) {
-        throw new BadRequestException(SOLD_OUT_MESSAGE);
-      }
-      preparedSegments.add(buildPreparedSegment(inventory, passengerCount));
-    }
-
-    preparedSegments.forEach(segment -> segment.inventory().reserveSeats(passengerCount));
+    List<PreparedTripSegment> preparedTripSegments = buildPreparedTripSegments(request.segments(), inventoryById);
 
     List<PreparedAncillary> preparedAncillaries = request.ancillaries().stream()
         .map(this::buildPreparedAncillary)
         .toList();
-    List<PreparedSeatSelection> preparedSeatSelections = buildPreparedSeatSelections(
+    PreparedSeatSelectionContext preparedSeatSelectionContext = buildPreparedSeatSelections(
         request.seatSelections(),
-        new LinkedHashSet<>(inventoryIds),
-        passengerCount
+        inventoryById,
+        preparedTripSegments,
+        request.passengers(),
+        currentTime
     );
+    List<PreparedSegment> preparedSegments = buildPreparedSegments(
+        preparedSeatSelectionContext.passengerCountByInventoryId(),
+        inventoryById,
+        preparedTripSegments
+    );
+    List<PreparedSeatSelection> preparedSeatSelections = preparedSeatSelectionContext.selections();
+
+    preparedSegments.forEach(segment -> segment.inventory().reserveSeats(segment.passengerCount()));
 
     long baseAmount = preparedSegments.stream().mapToLong(PreparedSegment::subtotalAmount).sum();
     long ancillaryAmount = preparedAncillaries.stream().mapToLong(PreparedAncillary::subtotalAmount).sum();
@@ -566,12 +565,125 @@ public class BookingService {
     booking.markExpired(currentTime);
   }
 
-  private PreparedSegment buildPreparedSegment(FlightFareInventoryEntity inventory, int passengerCount) {
+  private List<Long> collectReferencedInventoryIds(BookingHoldRequest request) {
+    LinkedHashSet<Long> inventoryIds = new LinkedHashSet<>();
+    request.segments().stream()
+        .map(BookingHoldRequest.SegmentRequest::inventoryId)
+        .filter(Objects::nonNull)
+        .forEach(inventoryIds::add);
+    request.seatSelections().stream()
+        .map(BookingHoldRequest.SeatSelectionRequest::inventoryId)
+        .forEach(inventoryIds::add);
+    return List.copyOf(inventoryIds);
+  }
+
+  private List<PreparedTripSegment> buildPreparedTripSegments(
+      List<BookingHoldRequest.SegmentRequest> segmentRequests,
+      Map<Long, FlightFareInventoryEntity> inventoryById
+  ) {
+    List<PreparedTripSegment> preparedTripSegments = new ArrayList<>();
+    Set<Long> selectedFlightIds = new LinkedHashSet<>();
+
+    for (int index = 0; index < segmentRequests.size(); index++) {
+      BookingHoldRequest.SegmentRequest segmentRequest = segmentRequests.get(index);
+      FlightFareInventoryEntity representativeInventory = segmentRequest.inventoryId() == null
+          ? null
+          : inventoryById.get(segmentRequest.inventoryId());
+      if (segmentRequest.inventoryId() != null && representativeInventory == null) {
+        throw new BadRequestException(INVENTORY_NOT_FOUND_MESSAGE);
+      }
+
+      Long resolvedFlightId = segmentRequest.flightId();
+      if (representativeInventory != null) {
+        Long flightIdFromInventory = representativeInventory.getFlight().getId();
+        if (resolvedFlightId != null && !resolvedFlightId.equals(flightIdFromInventory)) {
+          throw new BadRequestException(INVENTORY_NOT_FOUND_MESSAGE);
+        }
+        resolvedFlightId = flightIdFromInventory;
+      }
+
+      if (resolvedFlightId == null) {
+        throw new BadRequestException(INVENTORY_NOT_FOUND_MESSAGE);
+      }
+      if (!selectedFlightIds.add(resolvedFlightId)) {
+        throw new BadRequestException("Không được chọn trùng chặng bay trong cùng một đặt chỗ.");
+      }
+
+      Long flightId = resolvedFlightId;
+      FlightEntity flight = representativeInventory == null
+          ? inventoryById.values().stream()
+              .map(FlightFareInventoryEntity::getFlight)
+              .filter(Objects::nonNull)
+              .filter(candidate -> flightId.equals(candidate.getId()))
+              .findFirst()
+              .orElseThrow(() -> new BadRequestException(INVENTORY_NOT_FOUND_MESSAGE))
+          : representativeInventory.getFlight();
+
+      preparedTripSegments.add(new PreparedTripSegment(
+          index,
+          flightId,
+          flight.getCode(),
+          flight.getOriginAirport().getCityName(),
+          flight.getDestinationAirport().getCityName(),
+          flight.getOriginAirport().getCode(),
+          flight.getDestinationAirport().getCode(),
+          flight.getDepartureAt(),
+          flight.getArrivalAt()
+      ));
+    }
+
+    return List.copyOf(preparedTripSegments);
+  }
+
+  private List<PreparedSegment> buildPreparedSegments(
+      Map<Long, Integer> passengerCountByInventoryId,
+      Map<Long, FlightFareInventoryEntity> inventoryById,
+      List<PreparedTripSegment> preparedTripSegments
+  ) {
+    Map<Long, PreparedTripSegment> tripSegmentByFlightId = preparedTripSegments.stream()
+        .collect(Collectors.toMap(
+            PreparedTripSegment::flightId,
+            tripSegment -> tripSegment,
+            (left, right) -> left,
+            LinkedHashMap::new
+        ));
+
+    return passengerCountByInventoryId.entrySet().stream()
+        .map(entry -> {
+          FlightFareInventoryEntity inventory = inventoryById.get(entry.getKey());
+          if (inventory == null) {
+            throw new BadRequestException(INVENTORY_NOT_FOUND_MESSAGE);
+          }
+
+          int passengerCount = entry.getValue();
+          if (inventory.getAvailableSeats() < passengerCount) {
+            throw new BadRequestException(SOLD_OUT_MESSAGE);
+          }
+
+          PreparedTripSegment tripSegment = tripSegmentByFlightId.get(inventory.getFlight().getId());
+          if (tripSegment == null) {
+            throw new BadRequestException(INVENTORY_NOT_FOUND_MESSAGE);
+          }
+
+          return buildPreparedSegment(inventory, passengerCount, tripSegment.segmentIndex());
+        })
+        .sorted(Comparator
+            .comparingInt(PreparedSegment::segmentIndex)
+            .thenComparingInt(segment -> productCatalogService.requireFareMeta(segment.fareFamily()).rowStart()))
+        .toList();
+  }
+
+  private PreparedSegment buildPreparedSegment(
+      FlightFareInventoryEntity inventory,
+      int passengerCount,
+      int segmentIndex
+  ) {
     FlightEntity flight = inventory.getFlight();
     ProductCatalogService.FareMeta fareMeta = productCatalogService.requireFareMeta(inventory.getFareFamily());
     long subtotalAmount = inventory.getPrice() * passengerCount;
 
     return new PreparedSegment(
+        segmentIndex,
         inventory,
         flight.getCode(),
         flight.getOriginAirport().getCityName(),
@@ -606,22 +718,36 @@ public class BookingService {
     );
   }
 
-  private List<PreparedSeatSelection> buildPreparedSeatSelections(
+  private PreparedSeatSelectionContext buildPreparedSeatSelections(
       List<BookingHoldRequest.SeatSelectionRequest> seatSelectionRequests,
-      Set<Long> inventoryIds,
-      int passengerCount
+      Map<Long, FlightFareInventoryEntity> inventoryById,
+      List<PreparedTripSegment> preparedTripSegments,
+      List<BookingHoldRequest.PassengerRequest> passengers,
+      OffsetDateTime currentTime
   ) {
-    if (seatSelectionRequests.isEmpty()) {
-      return List.of();
+    int passengerCount = passengers.size();
+    int segmentCount = preparedTripSegments.size();
+    int expectedSeatSelectionCount = passengerCount * segmentCount;
+    if (seatSelectionRequests.size() != expectedSeatSelectionCount) {
+      throw new BadRequestException(SEAT_SELECTION_MISMATCH_MESSAGE);
     }
 
-    long unitPrice = productCatalogService.requireAncillary("SEAT_PLUS").price();
+    Map<Long, PreparedTripSegment> tripSegmentByFlightId = preparedTripSegments.stream()
+        .collect(Collectors.toMap(
+            PreparedTripSegment::flightId,
+            tripSegment -> tripSegment,
+            (left, right) -> left,
+            LinkedHashMap::new
+        ));
+    Map<Long, Set<String>> occupiedSeatsByFlightId = new LinkedHashMap<>();
     Set<String> passengerSegmentKeys = new LinkedHashSet<>();
     Set<String> seatSegmentKeys = new LinkedHashSet<>();
     List<PreparedSeatSelection> preparedSeatSelections = new ArrayList<>();
+    Map<Long, Integer> passengerCountByInventoryId = new LinkedHashMap<>();
 
     for (BookingHoldRequest.SeatSelectionRequest seatSelectionRequest : seatSelectionRequests) {
-      if (!inventoryIds.contains(seatSelectionRequest.inventoryId())) {
+      FlightFareInventoryEntity inventory = inventoryById.get(seatSelectionRequest.inventoryId());
+      if (inventory == null) {
         throw new BadRequestException(SEAT_SELECTION_INVALID_MESSAGE);
       }
 
@@ -630,23 +756,74 @@ public class BookingService {
         throw new BadRequestException(SEAT_SELECTION_INVALID_MESSAGE);
       }
 
+      long flightId = inventory.getFlight().getId();
+      PreparedTripSegment tripSegment = resolveTripSegment(
+          seatSelectionRequest.segmentIndex(),
+          flightId,
+          preparedTripSegments,
+          tripSegmentByFlightId
+      );
       String seatNumber = normalizeSeatNumber(seatSelectionRequest.seatNumber());
-      String passengerSegmentKey = seatSelectionRequest.inventoryId() + ":" + passengerIndex;
-      String seatSegmentKey = seatSelectionRequest.inventoryId() + ":" + seatNumber;
+      String passengerSegmentKey = tripSegment.segmentIndex() + ":" + passengerIndex;
+      String seatSegmentKey = flightId + ":" + seatNumber;
 
       if (!passengerSegmentKeys.add(passengerSegmentKey) || !seatSegmentKeys.add(seatSegmentKey)) {
         throw new BadRequestException(SEAT_SELECTION_DUPLICATE_MESSAGE);
       }
+      if (!productCatalogService.isSeatNumberAllowed(inventory.getFareFamily(), seatNumber)) {
+        throw new BadRequestException(SEAT_SELECTION_INVALID_MESSAGE);
+      }
+
+      Set<String> occupiedSeats = occupiedSeatsByFlightId.computeIfAbsent(
+          flightId,
+          ignored -> new LinkedHashSet<>(
+              bookingSeatSelectionRepository.findOccupiedSeatNumbersByFlightId(flightId, currentTime)
+          )
+      );
+      if (occupiedSeats.contains(seatNumber)) {
+        throw new BadRequestException(SEAT_SELECTION_DUPLICATE_MESSAGE);
+      }
+      occupiedSeats.add(seatNumber);
+      passengerCountByInventoryId.merge(seatSelectionRequest.inventoryId(), 1, Integer::sum);
 
       preparedSeatSelections.add(new PreparedSeatSelection(
           seatSelectionRequest.inventoryId(),
           passengerIndex,
+          tripSegment.segmentIndex(),
           seatNumber,
-          unitPrice
+          0L
       ));
     }
 
-    return List.copyOf(preparedSeatSelections);
+    return new PreparedSeatSelectionContext(
+        List.copyOf(preparedSeatSelections),
+        Map.copyOf(passengerCountByInventoryId)
+    );
+  }
+
+  private PreparedTripSegment resolveTripSegment(
+      Integer requestedSegmentIndex,
+      long flightId,
+      List<PreparedTripSegment> preparedTripSegments,
+      Map<Long, PreparedTripSegment> tripSegmentByFlightId
+  ) {
+    if (requestedSegmentIndex != null) {
+      if (requestedSegmentIndex < 0 || requestedSegmentIndex >= preparedTripSegments.size()) {
+        throw new BadRequestException(SEAT_SELECTION_INVALID_MESSAGE);
+      }
+
+      PreparedTripSegment tripSegment = preparedTripSegments.get(requestedSegmentIndex);
+      if (tripSegment.flightId() != flightId) {
+        throw new BadRequestException(SEAT_SELECTION_INVALID_MESSAGE);
+      }
+      return tripSegment;
+    }
+
+    PreparedTripSegment tripSegment = tripSegmentByFlightId.get(flightId);
+    if (tripSegment == null) {
+      throw new BadRequestException(SEAT_SELECTION_INVALID_MESSAGE);
+    }
+    return tripSegment;
   }
 
   private BookingHoldResponse mapHoldResponse(BookingEntity booking) {
@@ -837,13 +1014,6 @@ public class BookingService {
       throw new BadRequestException("H\u00e0nh tr\u00ecnh kh\u1ee9 h\u1ed3i c\u1ea7n ch\u1ecdn \u0111\u1ee7 chi\u1ec1u \u0111i v\u00e0 chi\u1ec1u v\u1ec1.");
     }
 
-    Set<Long> inventoryIds = new LinkedHashSet<>();
-    request.segments().forEach(segmentRequest -> {
-      if (!inventoryIds.add(segmentRequest.inventoryId())) {
-        throw new BadRequestException("Kh\u00f4ng \u0111\u01b0\u1ee3c ch\u1ecdn tr\u00f9ng kho gh\u1ebf trong c\u00f9ng m\u1ed9t \u0111\u1eb7t ch\u1ed7.");
-      }
-    });
-
     long adultCount = request.passengers().stream()
         .map(BookingHoldRequest.PassengerRequest::passengerType)
         .map(this::normalizePassengerType)
@@ -870,17 +1040,15 @@ public class BookingService {
       }
     });
 
-    int seatSelectionCount = request.seatSelections().size();
-    int seatAncillaryQuantity = request.ancillaries().stream()
-        .filter(ancillary -> "SEAT_PLUS".equals(productCatalogService.normalizeAncillaryCode(ancillary.code())))
-        .mapToInt(ancillary -> ancillary.quantity() == null ? 1 : ancillary.quantity())
-        .sum();
-
-    if (seatSelectionCount == 0 && seatAncillaryQuantity > 0) {
-      throw new BadRequestException(SEAT_SELECTION_MISMATCH_MESSAGE);
+    boolean containsSeatPlus = request.ancillaries().stream()
+        .anyMatch(ancillary -> "SEAT_PLUS".equals(productCatalogService.normalizeAncillaryCode(ancillary.code())));
+    if (containsSeatPlus) {
+      throw new BadRequestException("Ghế ưu tiên không còn được bán riêng trong luồng đặt vé này.");
     }
 
-    if (seatSelectionCount > 0 && seatAncillaryQuantity != seatSelectionCount) {
+    int seatSelectionCount = request.seatSelections().size();
+    int expectedSeatSelectionCount = request.passengers().size() * request.segments().size();
+    if (seatSelectionCount != expectedSeatSelectionCount) {
       throw new BadRequestException(SEAT_SELECTION_MISMATCH_MESSAGE);
     }
   }
@@ -954,6 +1122,7 @@ public class BookingService {
   }
 
   private record PreparedSegment(
+      int segmentIndex,
       FlightFareInventoryEntity inventory,
       String code,
       String fromCity,
@@ -983,8 +1152,28 @@ public class BookingService {
   private record PreparedSeatSelection(
       long inventoryId,
       int passengerIndex,
+      int segmentIndex,
       String seatNumber,
       long unitPrice
+  ) {
+  }
+
+  private record PreparedTripSegment(
+      int segmentIndex,
+      long flightId,
+      String code,
+      String fromCity,
+      String toCity,
+      String originCode,
+      String destinationCode,
+      OffsetDateTime departureAt,
+      OffsetDateTime arrivalAt
+  ) {
+  }
+
+  private record PreparedSeatSelectionContext(
+      List<PreparedSeatSelection> selections,
+      Map<Long, Integer> passengerCountByInventoryId
   ) {
   }
 }

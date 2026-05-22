@@ -7,15 +7,17 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   ApiBookingPassengerInput,
   ApiCreateBookingHoldRequest,
+  ApiFlightBookingFareOption,
+  ApiFlightBookingOptionsResponse,
   PassengerType
 } from "@qlvmb/shared-types";
 
 import { SectionHeading } from "@/components/section-heading";
+import { resolveApiClientErrorMessage } from "@/lib/api-client";
 import { loadActiveAuthSession, type AuthSession } from "@/lib/auth-session";
-import { createBookingHold } from "@/lib/booking-api";
+import { createBookingHold, fetchFlightBookingOptions } from "@/lib/booking-api";
 import { parseBookingHandoffState, type BookingHandoffSegment } from "@/lib/booking-flow";
 import { hienThiTenGoiGia } from "@/lib/display";
-import { resolveApiClientErrorMessage } from "@/lib/api-client";
 import { formatCurrency } from "@/lib/format";
 
 interface ContactFormState {
@@ -32,24 +34,16 @@ interface PassengerFormState {
   passengerType: PassengerType;
 }
 
+interface PassengerSegmentChoice {
+  fareFamily: ApiFlightBookingFareOption["fareFamily"] | null;
+  farePrice: number;
+  fareTitle: string;
+  inventoryId: number | null;
+  seatNumber: string;
+}
+
 const seatRows = Array.from({ length: 28 }, (_, index) => index + 1);
 const seatLetters = ["A", "B", "C", "D", "E", "F"];
-const unavailableSeats = new Set([
-  "1C",
-  "2F",
-  "4A",
-  "6D",
-  "8C",
-  "10E",
-  "12A",
-  "14F",
-  "17B",
-  "19D",
-  "22A",
-  "24F",
-  "27C"
-]);
-const seatPrice = 320000;
 
 function buildPassengerForms(
   adultCount: number,
@@ -113,8 +107,65 @@ function hydrateContactFromSession(
   };
 }
 
-function tinhTienCoBan(segments: BookingHandoffSegment[], passengerCount: number) {
-  return segments.reduce((tongTien, segment) => tongTien + segment.price * passengerCount, 0);
+function createEmptyPassengerChoice(): PassengerSegmentChoice {
+  return {
+    fareFamily: null,
+    farePrice: 0,
+    fareTitle: "",
+    inventoryId: null,
+    seatNumber: ""
+  };
+}
+
+function taoLuaChonMacDinh(
+  fareOptions: ApiFlightBookingOptionsResponse["fareOptions"]
+): PassengerSegmentChoice {
+  const fareMacDinh = [...fareOptions].sort((firstFare, secondFare) => firstFare.price - secondFare.price)[0];
+
+  if (!fareMacDinh) {
+    return createEmptyPassengerChoice();
+  }
+
+  return {
+    fareFamily: fareMacDinh.fareFamily,
+    farePrice: fareMacDinh.price,
+    fareTitle: fareMacDinh.title,
+    inventoryId: fareMacDinh.inventoryId,
+    seatNumber: ""
+  };
+}
+
+function createDefaultChoices(
+  bookingOptions: ApiFlightBookingOptionsResponse[],
+  passengerCount: number
+): PassengerSegmentChoice[][] {
+  return bookingOptions.map((segmentOptions) => {
+    const luaChonMacDinh = taoLuaChonMacDinh(segmentOptions.fareOptions);
+    return Array.from({ length: passengerCount }, () => ({ ...luaChonMacDinh }));
+  });
+}
+
+function tinhTongTienTamTinh(segmentChoices: PassengerSegmentChoice[][]): number {
+  return segmentChoices.flat().reduce((tongTien, choice) => tongTien + choice.farePrice, 0);
+}
+
+function findFareOption(
+  segmentOptions: ApiFlightBookingOptionsResponse | undefined,
+  inventoryId: number | null
+) {
+  if (!segmentOptions || inventoryId === null) {
+    return null;
+  }
+
+  return segmentOptions.fareOptions.find((fareOption) => fareOption.inventoryId === inventoryId) ?? null;
+}
+
+function tinhTongGheCon(segmentOptions: ApiFlightBookingOptionsResponse | undefined): number {
+  if (!segmentOptions) {
+    return 0;
+  }
+
+  return segmentOptions.fareOptions.reduce((tongGhe, fareOption) => tongGhe + fareOption.seatsLeft, 0);
 }
 
 export function BookingPageClient() {
@@ -135,10 +186,14 @@ export function BookingPageClient() {
       ? buildPassengerForms(handoffState.adultCount, handoffState.childCount, handoffState.infantCount)
       : []
   );
+  const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
-  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  const [bookingOptions, setBookingOptions] = useState<ApiFlightBookingOptionsResponse[]>([]);
+  const [isLoadingOptions, setIsLoadingOptions] = useState(false);
+  const [optionsError, setOptionsError] = useState<string | null>(null);
+  const [segmentChoices, setSegmentChoices] = useState<PassengerSegmentChoice[][]>([]);
+  const [activePassengerBySegment, setActivePassengerBySegment] = useState<number[]>([]);
 
   useEffect(() => {
     const storedSession = loadActiveAuthSession();
@@ -154,22 +209,76 @@ export function BookingPageClient() {
   useEffect(() => {
     if (!handoffState) {
       setPassengers([]);
-      setSelectedSeats([]);
+      setBookingOptions([]);
+      setSegmentChoices([]);
+      setActivePassengerBySegment([]);
       return;
     }
 
     setPassengers(
       buildPassengerForms(
-          handoffState.adultCount,
-          handoffState.childCount,
-          handoffState.infantCount
+        handoffState.adultCount,
+        handoffState.childCount,
+        handoffState.infantCount
       )
     );
   }, [handoffState]);
 
   useEffect(() => {
-    setSelectedSeats((currentSeats) => currentSeats.slice(0, passengers.length));
-  }, [passengers.length]);
+    if (!handoffState) {
+      return;
+    }
+
+    const currentHandoffState = handoffState;
+    let cancelled = false;
+
+    async function loadBookingOptions() {
+      setIsLoadingOptions(true);
+      setOptionsError(null);
+
+      try {
+        const nextOptions = await Promise.all(
+          currentHandoffState.segments.map((segment) => fetchFlightBookingOptions(segment.flightId))
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        setBookingOptions(nextOptions);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setBookingOptions([]);
+        setSegmentChoices([]);
+        setActivePassengerBySegment([]);
+        setOptionsError(resolveApiClientErrorMessage(error, "Không thể tải lựa chọn hạng vé và ghế lúc này."));
+      } finally {
+        if (!cancelled) {
+          setIsLoadingOptions(false);
+        }
+      }
+    }
+
+    void loadBookingOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [handoffState]);
+
+  useEffect(() => {
+    if (bookingOptions.length === 0 || passengers.length === 0) {
+      setSegmentChoices([]);
+      setActivePassengerBySegment([]);
+      return;
+    }
+
+    setSegmentChoices(createDefaultChoices(bookingOptions, passengers.length));
+    setActivePassengerBySegment(Array.from({ length: bookingOptions.length }, () => 0));
+  }, [bookingOptions, passengers.length]);
 
   if (!handoffState) {
     return (
@@ -189,65 +298,7 @@ export function BookingPageClient() {
   }
 
   const totalPassengerCount = passengers.length;
-  const baseAmount = tinhTienCoBan(handoffState.segments, totalPassengerCount);
-  const seatAmount = selectedSeats.length * seatPrice;
-  const totalAmount = baseAmount + seatAmount;
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (isSubmitting || !handoffState) {
-      return;
-    }
-
-    const currentHandoffState = handoffState;
-
-    setIsSubmitting(true);
-    setSubmitError(null);
-
-    try {
-      const payload: ApiCreateBookingHoldRequest = {
-        ancillaries: selectedSeats.length > 0
-          ? [
-              {
-                code: "SEAT_PLUS",
-                quantity: selectedSeats.length
-              }
-            ]
-          : [],
-        contact: {
-          email: contact.email.trim(),
-          fullName: contact.fullName.trim(),
-          phone: contact.phone.trim()
-        },
-        passengers: passengers.map<ApiBookingPassengerInput>((passenger) => ({
-          dateOfBirth: passenger.dateOfBirth,
-          documentNumber: passenger.documentNumber.trim(),
-          documentType: passenger.documentType.trim(),
-          fullName: passenger.fullName.trim(),
-          passengerType: passenger.passengerType
-        })),
-        seatSelections: currentHandoffState.segments.length > 0
-          ? selectedSeats.map((seatNumber, passengerIndex) => ({
-              inventoryId: currentHandoffState.segments[0].inventoryId,
-              passengerIndex,
-              seatNumber
-            }))
-          : [],
-        segments: currentHandoffState.segments.map((segment) => ({
-          inventoryId: segment.inventoryId
-        })),
-        tripType: currentHandoffState.tripType
-      };
-
-      const response = await createBookingHold(payload, accessToken);
-      router.push(`/booking/${response.bookingCode}/checkout`);
-    } catch (error) {
-      setSubmitError(resolveApiClientErrorMessage(error, "Không thể giữ chỗ lúc này."));
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
+  const totalAmount = tinhTongTienTamTinh(segmentChoices);
 
   function updatePassenger<FieldName extends keyof PassengerFormState>(
     passengerIndex: number,
@@ -266,22 +317,121 @@ export function BookingPageClient() {
     );
   }
 
-  function toggleSeat(seatNumber: string) {
-    if (unavailableSeats.has(seatNumber)) {
+  function chonHanhKhachChoSegment(segmentIndex: number, passengerIndex: number) {
+    setActivePassengerBySegment((currentValues) =>
+      currentValues.map((value, index) => (index === segmentIndex ? passengerIndex : value))
+    );
+  }
+
+  function chonHangVeChoHanhKhach(
+    segmentIndex: number,
+    passengerIndex: number,
+    fareOption: ApiFlightBookingFareOption
+  ) {
+    setSegmentChoices((currentChoices) =>
+      currentChoices.map((segmentChoiceList, currentSegmentIndex) => {
+        if (currentSegmentIndex !== segmentIndex) {
+          return segmentChoiceList;
+        }
+
+        return segmentChoiceList.map((choice, currentPassengerIndex) =>
+          currentPassengerIndex === passengerIndex
+            ? {
+                fareFamily: fareOption.fareFamily,
+                farePrice: fareOption.price,
+                fareTitle: fareOption.title,
+                inventoryId: fareOption.inventoryId,
+                seatNumber: ""
+              }
+            : choice
+        );
+      })
+    );
+  }
+
+  function chonGheChoHanhKhach(segmentIndex: number, passengerIndex: number, seatNumber: string) {
+    setSegmentChoices((currentChoices) =>
+      currentChoices.map((segmentChoiceList, currentSegmentIndex) => {
+        if (currentSegmentIndex !== segmentIndex) {
+          return segmentChoiceList;
+        }
+
+        return segmentChoiceList.map((choice, currentPassengerIndex) =>
+          currentPassengerIndex === passengerIndex
+            ? {
+                ...choice,
+                seatNumber: choice.seatNumber === seatNumber ? "" : seatNumber
+              }
+            : choice
+        );
+      })
+    );
+  }
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (isSubmitting || !handoffState) {
       return;
     }
 
-    setSelectedSeats((currentSeats) => {
-      if (currentSeats.includes(seatNumber)) {
-        return currentSeats.filter((seat) => seat !== seatNumber);
-      }
+    const currentHandoffState = handoffState;
 
-      if (currentSeats.length >= totalPassengerCount) {
-        return currentSeats;
-      }
+    if (bookingOptions.length !== currentHandoffState.segments.length) {
+      setSubmitError("Hệ thống chưa tải xong lựa chọn hạng vé và sơ đồ ghế cho toàn bộ chặng bay.");
+      return;
+    }
 
-      return [...currentSeats, seatNumber];
-    });
+    const hasMissingChoice = segmentChoices.some((segmentChoiceList) =>
+      segmentChoiceList.some(
+        (choice) => choice.inventoryId === null || !choice.fareFamily || !choice.seatNumber
+      )
+    );
+
+    if (hasMissingChoice) {
+      setSubmitError("Hãy chọn đầy đủ hạng vé và ghế cho tất cả hành khách ở từng chặng trước khi giữ chỗ.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      const payload: ApiCreateBookingHoldRequest = {
+        ancillaries: [],
+        contact: {
+          email: contact.email.trim(),
+          fullName: contact.fullName.trim(),
+          phone: contact.phone.trim()
+        },
+        passengers: passengers.map<ApiBookingPassengerInput>((passenger) => ({
+          dateOfBirth: passenger.dateOfBirth,
+          documentNumber: passenger.documentNumber.trim(),
+          documentType: passenger.documentType.trim(),
+          fullName: passenger.fullName.trim(),
+          passengerType: passenger.passengerType
+        })),
+        seatSelections: segmentChoices.flatMap((segmentChoiceList, segmentIndex) =>
+          segmentChoiceList.map((choice, passengerIndex) => ({
+            inventoryId: choice.inventoryId as number,
+            passengerIndex,
+            seatNumber: choice.seatNumber,
+            segmentIndex
+          }))
+        ),
+        segments: currentHandoffState.segments.map((segment) => ({
+          flightId: segment.flightId
+        })),
+        tripType: currentHandoffState.tripType
+      };
+
+      const response = await createBookingHold(payload, accessToken);
+      router.push(`/booking/${response.bookingCode}/checkout`);
+    } catch (error) {
+      setSubmitError(resolveApiClientErrorMessage(error, "Không thể giữ chỗ lúc này."));
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -290,15 +440,15 @@ export function BookingPageClient() {
         <div className="page-hero-card booking-flow-hero">
           <div>
             <span className="section-eyebrow">Đặt vé</span>
-            <h1 className="page-title">Nhập thông tin hành khách và giữ chỗ theo chuyến bay đã chọn.</h1>
+            <h1 className="page-title">Chọn hạng vé và ghế theo từng hành khách trước khi giữ chỗ.</h1>
             <p className="page-hero-copy">
-              Kiểm tra hành trình, nhập thông tin hành khách, chọn thêm vị trí ghế ưu tiên và giữ chỗ trước khi thanh toán.
+              Kiểm tra hành trình, nhập thông tin hành khách, chọn hạng vé phù hợp cho từng người và chốt ghế riêng ở từng chặng trước khi thanh toán.
             </p>
           </div>
           <div className="booking-summary-card">
             <span className="pill booking-reference-pill">Giữ chỗ trong 15 phút</span>
             <h3>{handoffState.tripType === "round_trip" ? "Hành trình khứ hồi" : "Hành trình một chiều"}</h3>
-            <p>{totalPassengerCount} hành khách • Tổng tiền tạm tính theo hạng vé và dịch vụ đã chọn.</p>
+            <p>{totalPassengerCount} hành khách • Tạm tính theo hạng vé đã chọn ở từng chặng.</p>
             <strong>{formatCurrency(totalAmount)}</strong>
           </div>
         </div>
@@ -309,41 +459,45 @@ export function BookingPageClient() {
             <SectionHeading
               eyebrow="Chuyến bay đã chọn"
               title="Tóm tắt hành trình"
-              description="Kiểm tra lại chặng bay, giờ khởi hành và gói giá trước khi nhập thông tin hành khách."
+              description="Kiểm tra lại chặng bay, giờ khởi hành và giá mở đầu trước khi nhập thông tin hành khách."
             />
             <div className="stack-list">
-              {handoffState.segments.map((segment, index) => (
-                <article key={`${segment.inventoryId}-${segment.code}`} className="surface-card booking-segment-card">
-                  <div className="result-top">
-                    <div>
-                      <span className="section-eyebrow">
-                        {handoffState.tripType === "round_trip"
-                          ? index === 0
-                            ? "Chiều đi"
-                            : "Chiều về"
-                          : "Chặng bay"}
-                      </span>
-                      <h3>{segment.code}</h3>
-                      <p>{segment.from} - {segment.to}</p>
+              {handoffState.segments.map((segment, index) => {
+                const segmentOptions = bookingOptions[index];
+
+                return (
+                  <article key={`${segment.flightId}-${segment.code}`} className="surface-card booking-segment-card">
+                    <div className="result-top">
+                      <div>
+                        <span className="section-eyebrow">
+                          {handoffState.tripType === "round_trip"
+                            ? index === 0
+                              ? "Chiều đi"
+                              : "Chiều về"
+                            : "Chặng bay"}
+                        </span>
+                        <h3>{segment.code}</h3>
+                        <p>{segment.from} - {segment.to}</p>
+                      </div>
+                      <span className="pill">Giá mở đầu {formatCurrency(segment.baseFare)}</span>
                     </div>
-                    <span className="pill">{hienThiTenGoiGia(segment.fareFamily)}</span>
-                  </div>
-                  <div className="result-grid result-grid-rich">
-                    <div>
-                      <span>Khởi hành</span>
-                      <strong>{formatDateTime(segment.departureAt)}</strong>
+                    <div className="result-grid result-grid-rich">
+                      <div>
+                        <span>Khởi hành</span>
+                        <strong>{formatDateTime(segment.departureAt)}</strong>
+                      </div>
+                      <div>
+                        <span>Hạ cánh</span>
+                        <strong>{formatDateTime(segment.arrivalAt)}</strong>
+                      </div>
+                      <div>
+                        <span>Tổng ghế còn bán</span>
+                        <strong>{segmentOptions ? `${tinhTongGheCon(segmentOptions)} ghế` : "Đang tải"}</strong>
+                      </div>
                     </div>
-                    <div>
-                      <span>Hạ cánh</span>
-                      <strong>{formatDateTime(segment.arrivalAt)}</strong>
-                    </div>
-                    <div>
-                      <span>Giá mỗi hành khách</span>
-                      <strong>{formatCurrency(segment.price)}</strong>
-                    </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           </div>
 
@@ -353,6 +507,21 @@ export function BookingPageClient() {
               title="Người liên hệ và hành khách"
               description="Điền đúng họ tên, giấy tờ và ngày sinh để tránh phát sinh lỗi ở bước xuất vé."
             />
+
+            {isLoadingOptions ? (
+              <article className="surface-card booking-inline-info">
+                <strong>Đang tải lựa chọn hạng vé</strong>
+                <p>Hệ thống đang đồng bộ sơ đồ ghế và mức giá của từng chặng bay.</p>
+              </article>
+            ) : null}
+
+            {optionsError ? (
+              <article className="surface-card booking-inline-error">
+                <strong>Không thể tải lựa chọn chuyến bay</strong>
+                <p>{optionsError}</p>
+              </article>
+            ) : null}
+
             <form className="surface-card booking-form-card" onSubmit={handleSubmit}>
               <div className="stack-list">
                 <div className="booking-form-section">
@@ -461,62 +630,158 @@ export function BookingPageClient() {
                   </div>
                 </div>
 
-                <div className="booking-form-section">
-                  <div className="booking-seat-head">
-                    <div>
-                      <h3>Chọn chỗ ngồi</h3>
-                      <p>Chọn tối đa {totalPassengerCount} ghế ưu tiên cho chặng bay đã chọn. Ghế này sẽ được giữ lại và ưu tiên khi làm thủ tục trực tuyến.</p>
-                    </div>
-                    <strong>{formatCurrency(seatAmount)}</strong>
-                  </div>
-                  <div className="seat-map-card" aria-label="Sơ đồ chỗ ngồi trên máy bay">
-                    <div className="seat-map-airframe" aria-hidden="true">
-                      <div className="seat-map-tail" />
-                    </div>
-                    <div className="seat-map-nose" aria-hidden="true">Mũi máy bay</div>
-                    <div className="seat-map-wing seat-map-wing-left" aria-hidden="true" />
-                    <div className="seat-map-wing seat-map-wing-right" aria-hidden="true" />
-                    <div className="seat-map-cabin">
-                      {seatRows.map((row) => (
-                        <div key={row} className="seat-map-row">
-                          <span className="seat-row-number">{row}</span>
-                          {seatLetters.map((letter, index) => {
-                            const seatNumber = `${row}${letter}`;
-                            const isSelected = selectedSeats.includes(seatNumber);
-                            const isUnavailable = unavailableSeats.has(seatNumber);
+                {bookingOptions.map((segmentOptions, segmentIndex) => {
+                  const activePassengerIndex = activePassengerBySegment[segmentIndex] ?? 0;
+                  const activePassenger = passengers[activePassengerIndex];
+                  const activeChoice = segmentChoices[segmentIndex]?.[activePassengerIndex] ?? createEmptyPassengerChoice();
+                  const activeFareOption = findFareOption(segmentOptions, activeChoice.inventoryId);
+                  const localTakenSeats = new Set(
+                    (segmentChoices[segmentIndex] ?? [])
+                      .map((choice, passengerIndex) =>
+                        passengerIndex !== activePassengerIndex ? choice.seatNumber : ""
+                      )
+                      .filter(Boolean)
+                  );
+                  const occupiedSeats = new Set(
+                    segmentOptions.seats
+                      .filter((seat) => seat.occupied)
+                      .map((seat) => seat.seatNumber)
+                  );
 
-                            return (
-                              <button
-                                key={seatNumber}
-                                type="button"
-                                className={[
-                                  "seat-button",
-                                  index === 3 ? "seat-button-after-aisle" : "",
-                                  row <= 5 ? "seat-button-priority" : "",
-                                  isSelected ? "seat-button-selected" : "",
-                                  isUnavailable ? "seat-button-unavailable" : ""
-                                ].filter(Boolean).join(" ")}
-                                disabled={isUnavailable}
-                                onClick={() => toggleSeat(seatNumber)}
-                                aria-pressed={isSelected}
-                              >
-                                {seatNumber}
-                              </button>
-                            );
-                          })}
+                  return (
+                    <div key={segmentOptions.flightId} className="booking-form-section">
+                      <div className="booking-seat-head">
+                        <div>
+                          <h3>
+                            {handoffState.tripType === "round_trip"
+                              ? segmentIndex === 0
+                                ? "Chọn hạng vé và ghế cho chiều đi"
+                                : "Chọn hạng vé và ghế cho chiều về"
+                              : "Chọn hạng vé và ghế"}
+                          </h3>
+                          <p>
+                            Mỗi hành khách phải chọn riêng hạng vé và ghế cho chặng này. Chọn ghế không làm tăng giá, giá chỉ thay đổi theo hạng vé.
+                          </p>
                         </div>
-                      ))}
+                        <strong>{segmentOptions.code}</strong>
+                      </div>
+
+                      <div className="filter-chip-list">
+                        {passengers.map((passenger, passengerIndex) => {
+                          const currentChoice = segmentChoices[segmentIndex]?.[passengerIndex];
+                          const nhanGhe = currentChoice?.seatNumber ? ` • Ghế ${currentChoice.seatNumber}` : "";
+
+                          return (
+                            <button
+                              key={`${segmentOptions.flightId}-${passengerIndex}`}
+                              type="button"
+                              className={
+                                activePassengerIndex === passengerIndex
+                                  ? "assurance-chip filter-chip-button active"
+                                  : "assurance-chip filter-chip-button"
+                              }
+                              onClick={() => chonHanhKhachChoSegment(segmentIndex, passengerIndex)}
+                            >
+                              {`${passenger.fullName || `Hành khách ${passengerIndex + 1}`} • ${formatPassengerType(passenger.passengerType)}${nhanGhe}`}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="field-grid">
+                        {segmentOptions.fareOptions.map((fareOption) => {
+                          const isActive = activeChoice.inventoryId === fareOption.inventoryId;
+                          return (
+                            <button
+                              key={fareOption.inventoryId}
+                              type="button"
+                              className={isActive ? "surface-card result-card is-selected" : "surface-card result-card"}
+                              onClick={() => chonHangVeChoHanhKhach(segmentIndex, activePassengerIndex, fareOption)}
+                            >
+                              <div className="result-top">
+                                <div>
+                                  <span className="section-eyebrow">Hạng vé</span>
+                                  <h3>{fareOption.title}</h3>
+                                </div>
+                                <span className="pill">{fareOption.seatsLeft} ghế còn</span>
+                              </div>
+                              <div className="result-grid result-grid-rich">
+                                <div>
+                                  <span>Giá cho hành khách này</span>
+                                  <strong>{formatCurrency(fareOption.price)}</strong>
+                                </div>
+                                <div>
+                                  <span>Vùng ghế</span>
+                                  <strong>Hàng {fareOption.rowStart}-{fareOption.rowEnd}</strong>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="seat-map-card" aria-label={`Sơ đồ chỗ ngồi cho ${segmentOptions.code}`}>
+                        <div className="seat-map-airframe" aria-hidden="true">
+                          <div className="seat-map-tail" />
+                        </div>
+                        <div className="seat-map-nose" aria-hidden="true">Mũi máy bay</div>
+                        <div className="seat-map-wing seat-map-wing-left" aria-hidden="true" />
+                        <div className="seat-map-wing seat-map-wing-right" aria-hidden="true" />
+                        <div className="seat-map-cabin">
+                          {seatRows.map((row) => (
+                            <div key={`${segmentOptions.flightId}-${row}`} className="seat-map-row">
+                              <span className="seat-row-number">{row}</span>
+                              {seatLetters.map((letter, index) => {
+                                const seatNumber = `${row}${letter}`;
+                                const seatMeta = segmentOptions.seats.find((seat) => seat.seatNumber === seatNumber);
+                                const isSelected = activeChoice.seatNumber === seatNumber;
+                                const isTakenByOtherPassenger = localTakenSeats.has(seatNumber);
+                                const isOccupied = occupiedSeats.has(seatNumber);
+                                const isAllowedSeat = seatMeta
+                                  ? seatMeta.fareFamily === activeChoice.fareFamily
+                                  : activeFareOption
+                                    ? row >= activeFareOption.rowStart && row <= activeFareOption.rowEnd
+                                    : false;
+                                const isUnavailable = !isAllowedSeat || isOccupied || isTakenByOtherPassenger;
+
+                                return (
+                                  <button
+                                    key={`${segmentOptions.flightId}-${seatNumber}`}
+                                    type="button"
+                                    className={[
+                                      "seat-button",
+                                      index === 3 ? "seat-button-after-aisle" : "",
+                                      activeFareOption && row >= activeFareOption.rowStart && row <= activeFareOption.rowEnd
+                                        ? "seat-button-priority"
+                                        : "",
+                                      isSelected ? "seat-button-selected" : "",
+                                      isUnavailable && !isSelected ? "seat-button-unavailable" : ""
+                                    ].filter(Boolean).join(" ")}
+                                    disabled={isUnavailable && !isSelected}
+                                    onClick={() => chonGheChoHanhKhach(segmentIndex, activePassengerIndex, seatNumber)}
+                                    aria-pressed={isSelected}
+                                  >
+                                    {seatNumber}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="seat-map-legend">
+                          <span><i className="seat-legend-dot seat-legend-priority" /> Vùng ghế của hạng đã chọn</span>
+                          <span><i className="seat-legend-dot seat-legend-selected" /> Ghế đang chọn</span>
+                          <span><i className="seat-legend-dot seat-legend-unavailable" /> Ghế không chọn được</span>
+                        </div>
+                        <p className="seat-map-summary">
+                          {activePassenger
+                            ? `${activePassenger.fullName || `Hành khách ${activePassengerIndex + 1}`} đang chọn ${activeChoice.fareTitle || "chưa chọn hạng vé"}${activeChoice.seatNumber ? ` • Ghế ${activeChoice.seatNumber}` : " • chưa chọn ghế"}`
+                            : "Hãy chọn hành khách để gán ghế cho chặng này."}
+                        </p>
+                      </div>
                     </div>
-                    <div className="seat-map-legend">
-                      <span><i className="seat-legend-dot seat-legend-priority" /> Ghế ưu tiên</span>
-                      <span><i className="seat-legend-dot seat-legend-selected" /> Đã chọn</span>
-                      <span><i className="seat-legend-dot seat-legend-unavailable" /> Không còn</span>
-                    </div>
-                    <p className="seat-map-summary">
-                      Đã chọn {selectedSeats.length}/{totalPassengerCount}: {selectedSeats.length > 0 ? selectedSeats.join(", ") : "chưa chọn ghế"}
-                    </p>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
 
               {submitError ? (
@@ -531,7 +796,7 @@ export function BookingPageClient() {
                   <span className="section-eyebrow">Tổng tiền tạm tính</span>
                   <strong className="booking-total-amount">{formatCurrency(totalAmount)}</strong>
                 </div>
-                <button type="submit" className="button button-primary" disabled={isSubmitting}>
+                <button type="submit" className="button button-primary" disabled={isSubmitting || isLoadingOptions}>
                   {isSubmitting ? "Đang xử lý..." : "Tiếp tục / Giữ chỗ"}
                 </button>
               </div>

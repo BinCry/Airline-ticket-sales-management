@@ -3,14 +3,10 @@
 import { startTransition, useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
-import { TRIP_TYPES, type AirportOption, type FareFamily, type TripType } from "@qlvmb/shared-types";
+import { TRIP_TYPES, type AirportOption, type TripType } from "@qlvmb/shared-types";
 
 import { fetchAirportOptions } from "@/lib/airport-api";
-import {
-  TIEU_CHI_TIM_CHUYEN_BAY_MAC_DINH,
-  laGoiGiaHopLe,
-  taoDuongDanTimChuyenBay
-} from "@/lib/flight-search-api";
+import { TIEU_CHI_TIM_CHUYEN_BAY_MAC_DINH, taoDuongDanTimChuyenBay } from "@/lib/flight-search-api";
 
 const tripLabels: Record<TripType, string> = {
   one_way: "Một chiều",
@@ -25,9 +21,6 @@ export function FlightSearchPanel() {
   const [to, setTo] = useState(TIEU_CHI_TIM_CHUYEN_BAY_MAC_DINH.to);
   const [departureDate, setDepartureDate] = useState(TIEU_CHI_TIM_CHUYEN_BAY_MAC_DINH.departureDate);
   const [returnDate, setReturnDate] = useState(TIEU_CHI_TIM_CHUYEN_BAY_MAC_DINH.returnDate ?? "");
-  const [fareFamily, setFareFamily] = useState<FareFamily>(
-    TIEU_CHI_TIM_CHUYEN_BAY_MAC_DINH.fareFamily ?? "pho_thong_linh_hoat"
-  );
   const [adultCount, setAdultCount] = useState(TIEU_CHI_TIM_CHUYEN_BAY_MAC_DINH.adultCount);
   const [childCount, setChildCount] = useState(TIEU_CHI_TIM_CHUYEN_BAY_MAC_DINH.childCount);
   const [infantCount, setInfantCount] = useState(TIEU_CHI_TIM_CHUYEN_BAY_MAC_DINH.infantCount);
@@ -36,7 +29,6 @@ export function FlightSearchPanel() {
   const [goiYSanBayDen, setGoiYSanBayDen] = useState<AirportOption[]>([]);
   const [dangTaiSanBayDi, setDangTaiSanBayDi] = useState(false);
   const [dangTaiSanBayDen, setDangTaiSanBayDen] = useState(false);
-  const [loiGoiGia, setLoiGoiGia] = useState("");
 
   const passengerSummary = `${adultCount} người lớn, ${childCount} trẻ em, ${infantCount} em bé`;
 
@@ -131,22 +123,12 @@ export function FlightSearchPanel() {
       return;
     }
 
-    const goiGiaDuocChon = String(fareFamily);
-
-    if (!laGoiGiaHopLe(goiGiaDuocChon)) {
-      setLoiGoiGia("Hạng vé không hợp lệ. Vui lòng chọn lại.");
-      return;
-    }
-
-    setLoiGoiGia("");
-
     const duongDan = taoDuongDanTimChuyenBay({
       from: from.trim().toUpperCase(),
       to: to.trim().toUpperCase(),
       departureDate,
       returnDate: tripType === "round_trip" ? returnDate : null,
       tripType,
-      fareFamily: goiGiaDuocChon,
       adultCount,
       childCount,
       infantCount
@@ -262,21 +244,6 @@ export function FlightSearchPanel() {
             onChange={(event) => setReturnDate(event.target.value)}
           />
         </label>
-        <label className="field">
-          <span>Hạng vé</span>
-          <select
-            value={fareFamily}
-            onChange={(event) => {
-              setFareFamily(event.target.value as FareFamily);
-              setLoiGoiGia("");
-            }}
-          >
-            <option value="pho_thong_tiet_kiem">Phổ thông tiết kiệm</option>
-            <option value="pho_thong_linh_hoat">Phổ thông linh hoạt</option>
-            <option value="thuong_gia">Thương gia</option>
-          </select>
-          {loiGoiGia ? <small>{loiGoiGia}</small> : null}
-        </label>
         <div className="field field-inline">
           <span>Hành khách</span>
           <div className="counter-grid">
@@ -329,6 +296,7 @@ export function FlightSearchPanel() {
         </div>
       ) : null}
       <div className="search-assurance">
+        <span className="assurance-chip">Giá tìm thấy luôn mở đầu từ Phổ thông tiết kiệm</span>
         <span className="assurance-chip">Đổi hoặc hoàn theo điều kiện giá vé</span>
         <span className="assurance-chip">Hỗ trợ thẻ, chuyển khoản và ví điện tử</span>
         <span className="assurance-chip">Gửi vé điện tử và thông tin hành trình tự động</span>

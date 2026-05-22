@@ -14,6 +14,7 @@ import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Entity
 @Table(name = "flight")
@@ -151,6 +152,12 @@ public class FlightEntity {
 
   public void addFareInventory(FlightFareInventoryEntity fareInventory) {
     fareInventories.add(fareInventory);
+  }
+
+  public Optional<FlightFareInventoryEntity> findFareInventory(String fareFamily) {
+    return fareInventories.stream()
+        .filter(inventory -> inventory.getFareFamily().equalsIgnoreCase(fareFamily))
+        .findFirst();
   }
 
   public void updateOperations(

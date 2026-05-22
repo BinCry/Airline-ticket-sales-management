@@ -10,7 +10,9 @@ import com.qlvmb.airticket.domain.dto.CheckinCompleteResponse;
 import com.qlvmb.airticket.domain.entity.BoardingPassEntity;
 import com.qlvmb.airticket.domain.entity.BookingEntity;
 import com.qlvmb.airticket.domain.entity.BookingPassengerEntity;
+import com.qlvmb.airticket.domain.entity.BookingSeatSelectionEntity;
 import com.qlvmb.airticket.domain.entity.BookingSegmentEntity;
+import com.qlvmb.airticket.domain.entity.FlightEntity;
 import com.qlvmb.airticket.domain.entity.FlightFareInventoryEntity;
 import com.qlvmb.airticket.domain.entity.TicketEntity;
 import com.qlvmb.airticket.exception.BadRequestException;
@@ -88,6 +90,110 @@ class CheckinServiceTest {
     assertThatThrownBy(() -> checkinService.completeCheckin(
         new CheckinCompleteRequest("A6C2P1", java.util.List.of("7380000000001"), java.util.List.of())
     )).isInstanceOf(BadRequestException.class);
+  }
+
+  @Test
+  void completeCheckin_shouldReuseSeatTheoDungFlightKhiBookingMotChieuCoNhieuFareSegment() {
+    OffsetDateTime createdAt = OffsetDateTime.now().minusMinutes(10);
+    BookingEntity booking = BookingEntity.createHold(
+        "A6C2P1",
+        "one_way",
+        1990000L,
+        0L,
+        1990000L,
+        "VND",
+        createdAt,
+        createdAt.plusMinutes(BookingService.HOLD_MINUTES)
+    );
+
+    BookingPassengerEntity passenger = BookingPassengerEntity.create(
+        booking,
+        "Nguyen Van A",
+        "adult",
+        LocalDate.of(1995, 5, 12),
+        "CCCD",
+        "079123456789",
+        createdAt
+    );
+    booking.addPassenger(passenger);
+
+    FlightEntity flight = org.mockito.Mockito.mock(FlightEntity.class);
+    when(flight.getId()).thenReturn(501L);
+    when(flight.getStatus()).thenReturn("scheduled");
+    when(flight.getGate()).thenReturn("G5");
+
+    FlightFareInventoryEntity saverInventory = org.mockito.Mockito.mock(FlightFareInventoryEntity.class);
+    when(saverInventory.getFlight()).thenReturn(flight);
+
+    FlightFareInventoryEntity flexInventory = org.mockito.Mockito.mock(FlightFareInventoryEntity.class);
+    when(flexInventory.getFlight()).thenReturn(flight);
+
+    BookingSegmentEntity saverSegment = BookingSegmentEntity.create(
+        booking,
+        saverInventory,
+        "AU201",
+        "Thanh pho Ho Chi Minh",
+        "Ha Noi",
+        "SGN",
+        "HAN",
+        OffsetDateTime.parse("2026-03-20T06:10:00+07:00"),
+        OffsetDateTime.parse("2026-03-20T08:20:00+07:00"),
+        "pho_thong_tiet_kiem",
+        "Pho thong tiet kiem",
+        1490000L,
+        1,
+        1490000L,
+        createdAt
+    );
+    booking.addSegment(saverSegment);
+
+    BookingSegmentEntity flexSegment = BookingSegmentEntity.create(
+        booking,
+        flexInventory,
+        "AU201",
+        "Thanh pho Ho Chi Minh",
+        "Ha Noi",
+        "SGN",
+        "HAN",
+        OffsetDateTime.parse("2026-03-20T06:10:00+07:00"),
+        OffsetDateTime.parse("2026-03-20T08:20:00+07:00"),
+        "pho_thong_linh_hoat",
+        "Pho thong linh hoat",
+        1990000L,
+        1,
+        1990000L,
+        createdAt
+    );
+    booking.addSegment(flexSegment);
+
+    booking.addSeatSelection(BookingSeatSelectionEntity.create(
+        booking,
+        passenger,
+        flexSegment,
+        "3A",
+        0L,
+        createdAt
+    ));
+
+    booking.markTicketed("SANDBOX-000000000001", createdAt.plusMinutes(5));
+    TicketEntity ticket = TicketEntity.issue(
+        booking,
+        passenger,
+        "7380000000001",
+        createdAt.plusMinutes(5)
+    );
+    booking.addTicket(ticket);
+
+    when(bookingService.getBookingNotFoundMessage()).thenReturn("Khong tim thay dat cho.");
+    when(bookingService.lockDetailedBooking("A6C2P1", "Khong tim thay dat cho.")).thenReturn(booking);
+    when(boardingPassRepository.save(any(BoardingPassEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+    CheckinCompleteResponse response = checkinService.completeCheckin(
+        new CheckinCompleteRequest("A6C2P1", java.util.List.of("7380000000001"), java.util.List.of())
+    );
+
+    assertThat(response.boardingPasses()).hasSize(1);
+    assertThat(response.boardingPasses().getFirst().seatNumber()).isEqualTo("3A");
   }
 
   private BookingEntity heldBooking(String bookingCode) {

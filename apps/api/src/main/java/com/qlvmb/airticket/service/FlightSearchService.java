@@ -1,17 +1,23 @@
 package com.qlvmb.airticket.service;
 
+import com.qlvmb.airticket.domain.dto.FlightBookingOptionsResponse;
 import com.qlvmb.airticket.domain.dto.FlightSearchResponse;
 import com.qlvmb.airticket.domain.entity.FlightEntity;
 import com.qlvmb.airticket.domain.entity.FlightFareInventoryEntity;
 import com.qlvmb.airticket.domain.mapper.FlightSearchMapper;
 import com.qlvmb.airticket.exception.BadRequestException;
 import com.qlvmb.airticket.repository.AirportRepository;
+import com.qlvmb.airticket.repository.BookingSeatSelectionRepository;
 import com.qlvmb.airticket.repository.FlightRepository;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,23 +27,25 @@ public class FlightSearchService {
   private static final ZoneId ZONE_ID = ZoneId.of("Asia/Ho_Chi_Minh");
   private static final List<String> SEARCH_FILTERS = List.of(
       "Giờ bay",
-      "Gói giá",
       "Ngân sách",
       "Còn ghế"
   );
 
   private final AirportRepository airportRepository;
+  private final BookingSeatSelectionRepository bookingSeatSelectionRepository;
   private final FlightRepository flightRepository;
   private final ProductCatalogService productCatalogService;
   private final FlightSearchMapper flightSearchMapper;
 
   public FlightSearchService(
       AirportRepository airportRepository,
+      BookingSeatSelectionRepository bookingSeatSelectionRepository,
       FlightRepository flightRepository,
       ProductCatalogService productCatalogService,
       FlightSearchMapper flightSearchMapper
   ) {
     this.airportRepository = airportRepository;
+    this.bookingSeatSelectionRepository = bookingSeatSelectionRepository;
     this.flightRepository = flightRepository;
     this.productCatalogService = productCatalogService;
     this.flightSearchMapper = flightSearchMapper;
@@ -50,7 +58,6 @@ public class FlightSearchService {
       LocalDate departureDate,
       LocalDate returnDate,
       String tripType,
-      String fareFamily,
       int adultCount,
       int childCount,
       int infantCount
@@ -58,7 +65,6 @@ public class FlightSearchService {
     String normalizedFrom = normalizeAirportCode(from);
     String normalizedTo = normalizeAirportCode(to);
     String normalizedTripType = normalizeTripType(tripType);
-    String normalizedFareFamily = normalizeFareFamily(fareFamily);
 
     validateRequest(
         normalizedFrom,
@@ -66,17 +72,16 @@ public class FlightSearchService {
         departureDate,
         returnDate,
         normalizedTripType,
-        normalizedFareFamily,
         adultCount,
         childCount,
         infantCount
     );
 
     List<FlightSearchResponse.FlightCard> outboundFlights =
-        searchDirection(normalizedFrom, normalizedTo, departureDate, normalizedFareFamily);
+        searchDirection(normalizedFrom, normalizedTo, departureDate);
 
     List<FlightSearchResponse.FlightCard> returnFlights = "round_trip".equals(normalizedTripType)
-        ? searchDirection(normalizedTo, normalizedFrom, returnDate, normalizedFareFamily)
+        ? searchDirection(normalizedTo, normalizedFrom, returnDate)
         : List.of();
     List<FlightSearchResponse.FlightCard> allFlights = concatFlights(outboundFlights, returnFlights);
 
@@ -86,7 +91,6 @@ public class FlightSearchService {
         departureDate.toString(),
         returnDate == null ? null : returnDate.toString(),
         normalizedTripType,
-        normalizedFareFamily,
         adultCount,
         childCount,
         infantCount
@@ -105,6 +109,34 @@ public class FlightSearchService {
     );
   }
 
+  public FlightBookingOptionsResponse getBookingOptions(Long flightId) {
+    FlightEntity flight = flightRepository.findDetailedById(flightId)
+        .orElseThrow(() -> new BadRequestException("Không tìm thấy chuyến bay được chọn."));
+
+    if (!flight.isSalesOpen() || "cancelled".equals(flight.getStatus())) {
+      throw new BadRequestException("Chuyến bay hiện không còn mở bán.");
+    }
+
+    List<FlightBookingOptionsResponse.FareOptionItem> fareOptions = buildBookingFareOptions(flight);
+    Set<String> occupiedSeats = new LinkedHashSet<>(
+        bookingSeatSelectionRepository.findOccupiedSeatNumbersByFlightId(flightId, OffsetDateTime.now())
+    );
+
+    return new FlightBookingOptionsResponse(
+        flight.getId(),
+        flight.getCode(),
+        flight.getOriginAirport().getCode(),
+        flight.getDestinationAirport().getCode(),
+        flight.getOriginAirport().getCityName(),
+        flight.getDestinationAirport().getCityName(),
+        flight.getDepartureAt(),
+        flight.getArrivalAt(),
+        productCatalogService.resolveBaseFare(flight.getFareInventories()),
+        fareOptions,
+        buildSeatItems(occupiedSeats)
+    );
+  }
+
   private List<FlightSearchResponse.FlightCard> concatFlights(
       List<FlightSearchResponse.FlightCard> outboundFlights,
       List<FlightSearchResponse.FlightCard> returnFlights
@@ -115,26 +147,78 @@ public class FlightSearchService {
   private List<FlightSearchResponse.FlightCard> searchDirection(
       String from,
       String to,
-      LocalDate date,
-      String fareFamily
+      LocalDate date
   ) {
     OffsetDateTime start = date.atStartOfDay(ZONE_ID).toOffsetDateTime();
     OffsetDateTime end = date.plusDays(1).atStartOfDay(ZONE_ID).toOffsetDateTime();
-    List<FlightEntity> flights = flightRepository.searchRoute(from, to, start, end);
-    List<FlightFareInventoryEntity> inventories = flights.stream()
+    return flightRepository.searchRoute(from, to, start, end).stream()
         .filter(FlightEntity::isSalesOpen)
         .filter(flight -> !"cancelled".equals(flight.getStatus()))
-        .flatMap(flight -> flight.getFareInventories().stream())
-        .filter(inventory -> fareFamily == null || Objects.equals(inventory.getFareFamily(), fareFamily))
+        .map(flight -> {
+          List<FlightSearchResponse.FareOption> fareOptions = buildFareOptions(flight);
+          if (fareOptions.isEmpty()) {
+            return null;
+          }
+          return flightSearchMapper.toFlightCard(
+              flight,
+              productCatalogService.resolveBaseFare(flight.getFareInventories()),
+              fareOptions
+          );
+        })
+        .filter(Objects::nonNull)
+        .sorted(Comparator.comparing(FlightSearchResponse.FlightCard::departureAt))
         .toList();
+  }
 
-    if (inventories.isEmpty()) {
-      return List.of();
-    }
+  private List<FlightSearchResponse.FareOption> buildFareOptions(FlightEntity flight) {
+    return productCatalogService.getFixedFareMetas().stream()
+        .map(fareMeta -> flight.findFareInventory(fareMeta.fareFamily())
+            .map(inventory -> new FlightSearchResponse.FareOption(
+                inventory.getId(),
+                fareMeta.fareFamily(),
+                fareMeta.title(),
+                inventory.getPrice(),
+                inventory.getAvailableSeats(),
+                inventory.getTotalSeats()
+            ))
+            .orElse(null))
+        .filter(Objects::nonNull)
+        .filter(fareOption -> fareOption.seatsLeft() > 0)
+        .toList();
+  }
 
-    return inventories.stream()
-        .map(inventory -> flightSearchMapper.toFlightCard(inventory, inventory.getAvailableSeats()))
-        .filter(card -> card.seatsLeft() > 0)
+  private List<FlightBookingOptionsResponse.FareOptionItem> buildBookingFareOptions(FlightEntity flight) {
+    return productCatalogService.getFixedFareMetas().stream()
+        .map(fareMeta -> flight.findFareInventory(fareMeta.fareFamily())
+            .map(inventory -> new FlightBookingOptionsResponse.FareOptionItem(
+                inventory.getId(),
+                fareMeta.fareFamily(),
+                fareMeta.title(),
+                inventory.getPrice(),
+                inventory.getAvailableSeats(),
+                inventory.getTotalSeats(),
+                fareMeta.rowStart(),
+                fareMeta.rowEnd()
+            ))
+            .orElse(null))
+        .filter(Objects::nonNull)
+        .toList();
+  }
+
+  private List<FlightBookingOptionsResponse.SeatItem> buildSeatItems(Collection<String> occupiedSeats) {
+    Set<String> occupiedSeatSet = occupiedSeats.stream()
+        .map(String::toUpperCase)
+        .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+    List<String> seatLetters = List.of("A", "B", "C", "D", "E", "F");
+
+    return java.util.stream.IntStream.rangeClosed(1, 28)
+        .boxed()
+        .flatMap(rowNumber -> seatLetters.stream().map(seatLetter -> rowNumber + seatLetter))
+        .map(seatNumber -> new FlightBookingOptionsResponse.SeatItem(
+            seatNumber,
+            productCatalogService.resolveFareFamilyBySeatNumber(seatNumber),
+            occupiedSeatSet.contains(seatNumber)
+        ))
         .toList();
   }
 
@@ -144,7 +228,6 @@ public class FlightSearchService {
       LocalDate departureDate,
       LocalDate returnDate,
       String tripType,
-      String fareFamily,
       int adultCount,
       int childCount,
       int infantCount
@@ -173,10 +256,7 @@ public class FlightSearchService {
       throw new BadRequestException("Tổng số hành khách vượt quá giới hạn 9 người.");
     }
     if (infantCount > adultCount) {
-      throw new BadRequestException("Số lượng em bé không được vượt số người lớn.");
-    }
-    if (fareFamily != null) {
-      productCatalogService.requireFareMeta(fareFamily);
+      throw new BadRequestException("Số lượng em bé không được vượt quá số người lớn.");
     }
   }
 
@@ -205,12 +285,5 @@ public class FlightSearchService {
       throw new BadRequestException("Loại hành trình không hợp lệ.");
     }
     return normalizedTripType;
-  }
-
-  private String normalizeFareFamily(String fareFamily) {
-    if (fareFamily == null || fareFamily.isBlank()) {
-      return null;
-    }
-    return productCatalogService.normalizeFareFamily(fareFamily);
   }
 }

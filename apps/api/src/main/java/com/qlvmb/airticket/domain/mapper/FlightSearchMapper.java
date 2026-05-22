@@ -2,11 +2,11 @@ package com.qlvmb.airticket.domain.mapper;
 
 import com.qlvmb.airticket.domain.dto.FlightSearchResponse;
 import com.qlvmb.airticket.domain.entity.FlightEntity;
-import com.qlvmb.airticket.domain.entity.FlightFareInventoryEntity;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -21,7 +21,6 @@ public class FlightSearchMapper {
       String departureDate,
       String returnDate,
       String tripType,
-      String fareFamily,
       int adultCount,
       int childCount,
       int infantCount
@@ -32,20 +31,21 @@ public class FlightSearchMapper {
         departureDate,
         returnDate,
         tripType,
-        fareFamily,
         adultCount,
         childCount,
         infantCount
     );
   }
 
-  public FlightSearchResponse.FlightCard toFlightCard(FlightFareInventoryEntity inventory, long seatsLeft) {
-    FlightEntity flight = inventory.getFlight();
-    OffsetDateTime departureAt = chuyenVeMuiGioHienThi(flight.getDepartureAt());
-    OffsetDateTime arrivalAt = chuyenVeMuiGioHienThi(flight.getArrivalAt());
+  public FlightSearchResponse.FlightCard toFlightCard(
+      FlightEntity flight,
+      long baseFare,
+      List<FlightSearchResponse.FareOption> fares
+  ) {
+    OffsetDateTime departureAt = convertDisplayZone(flight.getDepartureAt());
+    OffsetDateTime arrivalAt = convertDisplayZone(flight.getArrivalAt());
 
     return new FlightSearchResponse.FlightCard(
-        inventory.getId(),
         flight.getId(),
         flight.getCode(),
         flight.getOriginAirport().getCityName(),
@@ -58,13 +58,12 @@ public class FlightSearchMapper {
         formatTime(arrivalAt),
         buildDuration(departureAt, arrivalAt),
         flight.getStatus(),
-        inventory.getFareFamily(),
-        inventory.getPrice(),
-        seatsLeft
+        baseFare,
+        fares
     );
   }
 
-  private OffsetDateTime chuyenVeMuiGioHienThi(OffsetDateTime dateTime) {
+  private OffsetDateTime convertDisplayZone(OffsetDateTime dateTime) {
     return dateTime.atZoneSameInstant(DISPLAY_ZONE_ID).toOffsetDateTime();
   }
 

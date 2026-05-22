@@ -1,13 +1,10 @@
 package com.qlvmb.airticket.domain.dto;
 
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.OffsetDateTime;
-import java.util.List;
 
 public record BackofficeFlightCreateRequest(
     @NotBlank
@@ -28,19 +25,7 @@ public record BackofficeFlightCreateRequest(
     @Size(max = 255)
     String note,
     boolean salesOpen,
-    @Valid
-    @NotEmpty
-    List<FareInventoryItem> fareInventories
+    @Min(1)
+    long baseFare
 ) {
-
-  public record FareInventoryItem(
-      @NotBlank
-      @Size(max = 64)
-      String fareFamily,
-      @Min(1)
-      int totalSeats,
-      @Min(1)
-      long price
-  ) {
-  }
 }

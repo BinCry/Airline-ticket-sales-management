@@ -1,5 +1,6 @@
 package com.qlvmb.airticket.domain.dto;
 
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -12,6 +13,8 @@ public record BackofficeFlightOperationUpdateRequest(
     String gate,
     @Size(max = 255)
     String note,
-    boolean salesOpen
+    boolean salesOpen,
+    @Min(1)
+    Long baseFare
 ) {
 }

@@ -76,6 +76,13 @@ public class FlightFareInventoryEntity {
     return price;
   }
 
+  public void syncConfiguration(int totalSeats, long price) {
+    int reservedSeats = this.totalSeats - this.availableSeats;
+    this.totalSeats = totalSeats;
+    this.availableSeats = Math.max(0, totalSeats - Math.max(0, reservedSeats));
+    this.price = price;
+  }
+
   public void reserveSeats(int seatCount) {
     availableSeats -= seatCount;
   }

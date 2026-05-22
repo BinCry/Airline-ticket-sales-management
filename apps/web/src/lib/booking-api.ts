@@ -5,6 +5,7 @@ import type {
   ApiCheckinCompleteRequest,
   ApiCheckinCompleteResponse,
   ApiCreateBookingHoldRequest,
+  ApiFlightBookingOptionsResponse,
   ApiManageBookingOverview,
   ApiPaymentCallbackRequest,
   ApiPaymentSessionResponse,
@@ -107,6 +108,59 @@ function isHoldResponse(value: unknown): value is ApiBookingHoldResponse {
   );
 }
 
+function isFlightBookingSeatItem(value: unknown): value is ApiFlightBookingOptionsResponse["seats"][number] {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.seatNumber === "string" &&
+    typeof value.fareFamily === "string" &&
+    typeof value.occupied === "boolean"
+  );
+}
+
+function isFlightBookingFareOption(
+  value: unknown
+): value is ApiFlightBookingOptionsResponse["fareOptions"][number] {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.inventoryId === "number" &&
+    typeof value.fareFamily === "string" &&
+    typeof value.title === "string" &&
+    typeof value.price === "number" &&
+    typeof value.seatsLeft === "number" &&
+    typeof value.totalSeats === "number" &&
+    typeof value.rowStart === "number" &&
+    typeof value.rowEnd === "number"
+  );
+}
+
+function isFlightBookingOptionsResponse(value: unknown): value is ApiFlightBookingOptionsResponse {
+  if (!isObject(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.flightId === "number" &&
+    typeof value.code === "string" &&
+    typeof value.originCode === "string" &&
+    typeof value.destinationCode === "string" &&
+    typeof value.from === "string" &&
+    typeof value.to === "string" &&
+    typeof value.departureAt === "string" &&
+    typeof value.arrivalAt === "string" &&
+    typeof value.baseFare === "number" &&
+    Array.isArray(value.fareOptions) &&
+    value.fareOptions.every(isFlightBookingFareOption) &&
+    Array.isArray(value.seats) &&
+    value.seats.every(isFlightBookingSeatItem)
+  );
+}
+
 function isCheckinResponse(value: unknown): value is ApiCheckinCompleteResponse {
   if (!isObject(value)) {
     return false;
@@ -133,6 +187,18 @@ export async function createBookingHold(
 
   if (!isHoldResponse(response)) {
     throw new ApiClientError("D\u1eef li\u1ec7u gi\u1eef ch\u1ed7 tr\u1ea3 v\u1ec1 kh\u00f4ng h\u1ee3p l\u1ec7.", 500);
+  }
+
+  return response;
+}
+
+export async function fetchFlightBookingOptions(flightId: number): Promise<ApiFlightBookingOptionsResponse> {
+  const response = await requestApi<unknown>(`/api/flights/${flightId}/booking-options`, {
+    fallbackMessage: "Không thể tải lựa chọn hạng vé và sơ đồ ghế lúc này."
+  });
+
+  if (!isFlightBookingOptionsResponse(response)) {
+    throw new ApiClientError("Dữ liệu lựa chọn hạng vé và ghế trả về không hợp lệ.", 500);
   }
 
   return response;

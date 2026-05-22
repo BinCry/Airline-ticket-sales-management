@@ -624,13 +624,7 @@ class ControllerSecurityTest {
                   "gate": "G8",
                   "note": "Chuyến bổ sung cuối tuần.",
                   "salesOpen": true,
-                  "fareInventories": [
-                    {
-                      "fareFamily": "pho_thong_tiet_kiem",
-                      "totalSeats": 40,
-                      "price": 1200000
-                    }
-                  ]
+                  "baseFare": 1200000
                 }
                 """)
             .header(HttpHeaders.AUTHORIZATION, bearerToken(List.of("operations_staff"), List.of("backoffice.operations"))))
@@ -651,13 +645,7 @@ class ControllerSecurityTest {
                   "gate": "G8",
                   "note": "Chuyến bổ sung cuối tuần.",
                   "salesOpen": true,
-                  "fareInventories": [
-                    {
-                      "fareFamily": "pho_thong_tiet_kiem",
-                      "totalSeats": 40,
-                      "price": 1200000
-                    }
-                  ]
+                  "baseFare": 1200000
                 }
                 """)
             .header(HttpHeaders.AUTHORIZATION, bearerToken(List.of("customer_support"), List.of("backoffice.support", "backoffice.finance"))))

@@ -12,7 +12,6 @@ const criteria: ApiFlightSearchCriteria = {
   adultCount: 1,
   childCount: 0,
   departureDate: "2026-03-20",
-  fareFamily: null,
   from: "SGN",
   infantCount: 0,
   returnDate: null,
@@ -28,13 +27,36 @@ const flight: ApiFlightCard = {
   departureTime: "06:10",
   destinationCode: "HAN",
   duration: "2 gio 10 phut",
-  fareFamily: "pho_thong_tiet_kiem",
+  fares: [
+    {
+      fareFamily: "pho_thong_tiet_kiem",
+      inventoryId: 20101,
+      price: 1490000,
+      seatsLeft: 120,
+      title: "Phổ thông tiết kiệm",
+      totalSeats: 120
+    },
+    {
+      fareFamily: "pho_thong_linh_hoat",
+      inventoryId: 20102,
+      price: 1990000,
+      seatsLeft: 36,
+      title: "Phổ thông linh hoạt",
+      totalSeats: 36
+    },
+    {
+      fareFamily: "thuong_gia",
+      inventoryId: 20103,
+      price: 2490000,
+      seatsLeft: 12,
+      title: "Thương gia",
+      totalSeats: 12
+    }
+  ],
   flightId: 201,
   from: "Thanh pho Ho Chi Minh",
-  inventoryId: 20101,
   originCode: "SGN",
-  price: 1490000,
-  seatsLeft: 8,
+  baseFare: 1490000,
   status: "on_time",
   to: "Ha Noi"
 };
@@ -55,6 +77,7 @@ describe("booking-flow", () => {
       adultCount: 1,
       tripType: "one_way"
     });
-    expect(handoffState?.segments[0].inventoryId).toBe(20101);
+    expect(handoffState?.segments[0].flightId).toBe(201);
+    expect(handoffState?.segments[0].baseFare).toBe(1490000);
   });
 });

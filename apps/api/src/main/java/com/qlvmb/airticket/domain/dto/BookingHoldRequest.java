@@ -41,8 +41,13 @@ public record BookingHoldRequest(
   }
 
   public record SegmentRequest(
-      @NotNull Long inventoryId
+      Long inventoryId,
+      Long flightId
   ) {
+
+    public SegmentRequest(Long inventoryId) {
+      this(inventoryId, null);
+    }
   }
 
   public record AncillaryRequest(
@@ -54,7 +59,12 @@ public record BookingHoldRequest(
   public record SeatSelectionRequest(
       @NotNull Long inventoryId,
       @NotNull Integer passengerIndex,
+      Integer segmentIndex,
       @NotBlank String seatNumber
   ) {
+
+    public SeatSelectionRequest(Long inventoryId, Integer passengerIndex, String seatNumber) {
+      this(inventoryId, passengerIndex, null, seatNumber);
+    }
   }
 }

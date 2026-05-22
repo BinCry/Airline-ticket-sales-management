@@ -1,5 +1,6 @@
 package com.qlvmb.airticket.controller;
 
+import com.qlvmb.airticket.domain.dto.FlightBookingOptionsResponse;
 import com.qlvmb.airticket.domain.dto.FlightSearchResponse;
 import com.qlvmb.airticket.service.FlightSearchService;
 import java.time.LocalDate;
@@ -26,7 +27,6 @@ public class FlightSearchController {
       @RequestParam(defaultValue = "2026-05-23") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate departureDate,
       @RequestParam(defaultValue = "2026-05-26") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate returnDate,
       @RequestParam(defaultValue = "round_trip") String tripType,
-      @RequestParam(required = false) String fareFamily,
       @RequestParam(defaultValue = "1") int adultCount,
       @RequestParam(defaultValue = "0") int childCount,
       @RequestParam(defaultValue = "0") int infantCount
@@ -37,10 +37,14 @@ public class FlightSearchController {
         departureDate,
         returnDate,
         tripType,
-        fareFamily,
         adultCount,
         childCount,
         infantCount
     );
+  }
+
+  @GetMapping("/flights/{flightId}/booking-options")
+  public FlightBookingOptionsResponse getBookingOptions(@org.springframework.web.bind.annotation.PathVariable Long flightId) {
+    return flightSearchService.getBookingOptions(flightId);
   }
 }

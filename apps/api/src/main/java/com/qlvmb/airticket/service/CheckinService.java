@@ -4,8 +4,10 @@ import com.qlvmb.airticket.domain.dto.CheckinCompleteRequest;
 import com.qlvmb.airticket.domain.dto.CheckinCompleteResponse;
 import com.qlvmb.airticket.domain.entity.BoardingPassEntity;
 import com.qlvmb.airticket.domain.entity.BookingEntity;
+import com.qlvmb.airticket.domain.entity.BookingPassengerEntity;
 import com.qlvmb.airticket.domain.entity.BookingSegmentEntity;
 import com.qlvmb.airticket.domain.entity.FlightEntity;
+import com.qlvmb.airticket.domain.entity.BookingSeatSelectionEntity;
 import com.qlvmb.airticket.domain.entity.TicketEntity;
 import com.qlvmb.airticket.exception.BadRequestException;
 import com.qlvmb.airticket.repository.BoardingPassRepository;
@@ -103,19 +105,27 @@ public class CheckinService {
         .map(BoardingPassEntity::getSeatNumber)
         .forEach(usedSeats::add);
 
-    BookingSegmentEntity segment = booking.getSegments().iterator().next();
-    FlightEntity flight = segment.getInventory() == null ? null : segment.getInventory().getFlight();
+    BookingSegmentEntity representativeSegment = booking.getSegments().iterator().next();
+    FlightEntity flight = representativeSegment.getInventory() == null
+        ? null
+        : representativeSegment.getInventory().getFlight();
     if (flight != null && "cancelled".equals(flight.getStatus())) {
       throw new BadRequestException("Không thể làm thủ tục trực tuyến cho chuyến bay đã hủy.");
     }
     OffsetDateTime currentTime = OffsetDateTime.now();
-    OffsetDateTime boardingTime = segment.getDepartureAt().minusMinutes(45);
+    OffsetDateTime boardingTime = representativeSegment.getDepartureAt().minusMinutes(45);
     String gate = resolveGate(flight);
     List<CheckinCompleteResponse.BoardingPassItem> boardingPasses = new ArrayList<>();
     Map<String, String> requestedSeatByTicketNumber = buildRequestedSeatMap(request, normalizedTicketNumbers);
 
     for (TicketEntity ticket : selectedTickets) {
-      String seatNumber = resolveSeatNumber(booking, segment, ticket, requestedSeatByTicketNumber, usedSeats);
+      String seatNumber = resolveSeatNumber(
+          booking,
+          representativeSegment,
+          ticket,
+          requestedSeatByTicketNumber,
+          usedSeats
+      );
       String barcode = generateBarcode(booking.getBookingCode(), ticket.getTicketNumber());
 
       BoardingPassEntity boardingPass = BoardingPassEntity.create(
@@ -176,7 +186,7 @@ public class CheckinService {
 
   private String resolveSeatNumber(
       BookingEntity booking,
-      BookingSegmentEntity segment,
+      BookingSegmentEntity representativeSegment,
       TicketEntity ticket,
       Map<String, String> requestedSeatByTicketNumber,
       Set<String> usedSeats
@@ -189,13 +199,48 @@ public class CheckinService {
       return requestedSeatNumber;
     }
 
+    Long flightId = representativeSegment.getInventory() == null
+        || representativeSegment.getInventory().getFlight() == null
+        ? null
+        : representativeSegment.getInventory().getFlight().getId();
+
     return booking.getSeatSelections().stream()
-        .filter(seatSelection -> seatSelection.getPassenger().getId().equals(ticket.getPassenger().getId()))
-        .filter(seatSelection -> seatSelection.getSegment().getId().equals(segment.getId()))
+        .filter(seatSelection -> isSamePassenger(seatSelection, ticket))
+        .filter(seatSelection -> isSeatSelectionBelongToFlight(seatSelection, flightId))
         .map(seatSelection -> seatSelection.getSeatNumber())
         .filter(seatNumber -> !usedSeats.contains(seatNumber))
         .findFirst()
         .orElseGet(() -> generateSeatNumber(usedSeats));
+  }
+
+  private boolean isSamePassenger(BookingSeatSelectionEntity seatSelection, TicketEntity ticket) {
+    BookingPassengerEntity seatPassenger = seatSelection.getPassenger();
+    BookingPassengerEntity ticketPassenger = ticket.getPassenger();
+    if (seatPassenger == null || ticketPassenger == null) {
+      return false;
+    }
+
+    if (seatPassenger.getId() != null && ticketPassenger.getId() != null) {
+      return seatPassenger.getId().equals(ticketPassenger.getId());
+    }
+
+    return seatPassenger == ticketPassenger;
+  }
+
+  private boolean isSeatSelectionBelongToFlight(
+      BookingSeatSelectionEntity seatSelection,
+      Long flightId
+  ) {
+    if (flightId == null) {
+      return false;
+    }
+
+    BookingSegmentEntity segment = seatSelection.getSegment();
+    if (segment == null || segment.getInventory() == null || segment.getInventory().getFlight() == null) {
+      return false;
+    }
+
+    return flightId.equals(segment.getInventory().getFlight().getId());
   }
 
   private String generateSeatNumber(Set<String> usedSeats) {

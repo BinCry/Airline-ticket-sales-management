@@ -123,8 +123,8 @@ export default async function HomePage() {
             <span className="section-eyebrow home-hero-eyebrow">Vietnam Airlines</span>
             <h1>Đặt vé nội địa linh hoạt, quản lý hành trình thuận tiện từ trước đến sau chuyến bay.</h1>
             <p>
-              Tìm chuyến bay theo giờ phù hợp, chọn gói giá rõ quyền lợi, bổ sung
-              hành lý hoặc chỗ ngồi, làm thủ tục trực tuyến và nhận hỗ trợ nhanh trong
+              Tìm chuyến bay theo giờ phù hợp, xem rõ ba hạng vé cố định, bổ sung
+              hành lý khi cần, làm thủ tục trực tuyến và nhận hỗ trợ nhanh trong
               cùng một trải nghiệm thống nhất.
             </p>
             <div className="hero-actions home-hero-actions">
