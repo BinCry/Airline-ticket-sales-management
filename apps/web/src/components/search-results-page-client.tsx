@@ -689,7 +689,8 @@ export function SearchResultsPageClient({
           adultCount,
           childCount,
           infantCount
-        })
+        }),
+        { scroll: false }
       );
     });
   }
