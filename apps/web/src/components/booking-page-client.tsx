@@ -711,7 +711,7 @@ export function BookingPageClient() {
                               </div>
                               <div className="result-grid result-grid-rich">
                                 <div>
-                                  <span>Giá cho hành khách này</span>
+                                  <span>Giá vé</span>
                                   <strong>{formatCurrency(fareOption.price)}</strong>
                                 </div>
                                 <div>
