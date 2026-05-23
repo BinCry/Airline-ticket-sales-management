@@ -28,6 +28,12 @@ const TEN_GOI_GIA: Record<string, string> = {
   thuong_gia: "Thương gia"
 };
 
+const LOP_MAU_GOI_GIA: Record<string, string> = {
+  pho_thong_tiet_kiem: "fare-theme-economy",
+  pho_thong_linh_hoat: "fare-theme-flex",
+  thuong_gia: "fare-theme-business"
+};
+
 export function hienThiTenSanBay(giaTri: string): string {
   return TEN_SAN_BAY_THEO_MA[giaTri] ?? giaTri;
 }
@@ -45,4 +51,8 @@ export function hienThiHanhTrinhTuChuoi(hanhTrinh: string): string {
 
 export function hienThiTenGoiGia(goiGia: string): string {
   return TEN_GOI_GIA[goiGia] ?? goiGia;
+}
+
+export function layLopMauGoiGia(goiGia: string): string {
+  return LOP_MAU_GOI_GIA[goiGia] ?? "fare-theme-default";
 }

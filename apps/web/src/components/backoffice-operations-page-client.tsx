@@ -25,6 +25,7 @@ import {
   updateBackofficeOperationsFlight,
   updateBackofficeOperationsVoucher
 } from "@/lib/backoffice-operations-api";
+import { layLopMauGoiGia } from "@/lib/display";
 import { pushToast } from "@/lib/toast";
 
 type OperationsState = "idle" | "loading" | "success" | "error";
@@ -689,7 +690,10 @@ export function BackofficeOperationsPageClient() {
 
               <div className="stack-list">
                 {taoDanhSachHangVeCoDinh(flightForm.baseFare).map((fareInventory) => (
-                  <article key={fareInventory.fareFamily} className="surface-card admin-nested-card">
+                  <article
+                    key={fareInventory.fareFamily}
+                    className={`surface-card admin-nested-card ${layLopMauGoiGia(fareInventory.fareFamily)}`}
+                  >
                     <div className="field-grid compact-grid">
                       <label className="field">
                         <span>Hạng vé cố định</span>
@@ -882,7 +886,10 @@ export function BackofficeOperationsPageClient() {
 
                   <div className="stack-list">
                     {flight.fareSummaries.map((fareSummary) => (
-                      <article key={`${flight.flightId}-${fareSummary.fareFamily}`} className="surface-card admin-nested-card">
+                      <article
+                        key={`${flight.flightId}-${fareSummary.fareFamily}`}
+                        className={`surface-card admin-nested-card ${layLopMauGoiGia(fareSummary.fareFamily)}`}
+                      >
                         <div className="field-grid compact-grid">
                           <label className="field">
                             <span>Hạng vé</span>

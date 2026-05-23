@@ -17,7 +17,7 @@ import { resolveApiClientErrorMessage } from "@/lib/api-client";
 import { loadActiveAuthSession, type AuthSession } from "@/lib/auth-session";
 import { createBookingHold, fetchFlightBookingOptions } from "@/lib/booking-api";
 import { parseBookingHandoffState, type BookingHandoffSegment } from "@/lib/booking-flow";
-import { hienThiTenGoiGia } from "@/lib/display";
+import { layLopMauGoiGia } from "@/lib/display";
 import { formatCurrency } from "@/lib/format";
 
 interface ContactFormState {
@@ -688,14 +688,18 @@ export function BookingPageClient() {
                         })}
                       </div>
 
-                      <div className="field-grid">
+                      <div className="field-grid booking-fare-grid">
                         {segmentOptions.fareOptions.map((fareOption) => {
                           const isActive = activeChoice.inventoryId === fareOption.inventoryId;
                           return (
                             <button
                               key={fareOption.inventoryId}
                               type="button"
-                              className={isActive ? "surface-card result-card is-selected" : "surface-card result-card"}
+                              className={
+                                isActive
+                                  ? `surface-card result-card is-selected ${layLopMauGoiGia(fareOption.fareFamily)}`
+                                  : `surface-card result-card ${layLopMauGoiGia(fareOption.fareFamily)}`
+                              }
                               onClick={() => chonHangVeChoHanhKhach(segmentIndex, activePassengerIndex, fareOption)}
                             >
                               <div className="result-top">
@@ -720,7 +724,10 @@ export function BookingPageClient() {
                         })}
                       </div>
 
-                      <div className="seat-map-card" aria-label={`Sơ đồ chỗ ngồi cho ${segmentOptions.code}`}>
+                      <div
+                        className={`seat-map-card ${layLopMauGoiGia(activeChoice.fareFamily ?? "")}`}
+                        aria-label={`Sơ đồ chỗ ngồi cho ${segmentOptions.code}`}
+                      >
                         <div className="seat-map-airframe" aria-hidden="true">
                           <div className="seat-map-tail" />
                         </div>
