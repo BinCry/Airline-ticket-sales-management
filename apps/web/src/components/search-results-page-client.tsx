@@ -21,7 +21,7 @@ import {
   createBookingHandoffUrl,
   createHandoffSegmentFromFlight
 } from "@/lib/booking-flow";
-import { hienThiHanhTrinh, hienThiTenGoiGia } from "@/lib/display";
+import { hienThiHanhTrinh, hienThiTenGoiGia, layLopMauGoiGia } from "@/lib/display";
 import {
   DEFAULT_FLIGHT_SEARCH_FILTER_STATE,
   type FlightSearchFilterState,
@@ -107,7 +107,8 @@ const routePresets = [
   { from: "SGN", to: "VCA", label: "TP. Hồ Chí Minh → Cần Thơ" },
   { from: "HAN", to: "HUI", label: "Hà Nội → Huế" },
   { from: "SGN", to: "UIH", label: "TP. Hồ Chí Minh → Quy Nhơn" },
-  { from: "HAN", to: "DLI", label: "Hà Nội → Đà Lạt" }
+  { from: "HAN", to: "DLI", label: "Hà Nội → Đà Lạt" },
+  { from: "SGN", to: "HPH", label: "TP. Hồ Chí Minh → Hải Phòng" }
 ] as const;
 
 type NhomHanhKhach = "adult" | "child" | "infant";
@@ -344,19 +345,42 @@ function taoTheKetQua(
           </div>
 
           <div className="result-grid result-grid-rich">
-            <div>
-              <span>Giá mở đầu</span>
-              <strong>{formatCurrency(flight.baseFare)}</strong>
+            <div className="result-metric-card">
+              <div>
+                <span>Giá mở đầu</span>
+                <strong>{formatCurrency(flight.baseFare)}</strong>
+              </div>
+              <div className="result-metric-image">
+                <Image
+                  src="/images/pho-thong-tiet-kiem-vietnam-airline-3.jpg"
+                  alt="Khoang ghế phổ thông minh họa cho giá mở đầu"
+                  fill
+                  sizes="(max-width: 768px) 100vw, 32vw"
+                />
+              </div>
             </div>
-            <div>
-              <span>Tổng ghế còn bán</span>
-              <strong>{flight.fares.reduce((tong, fare) => tong + fare.seatsLeft, 0)} ghế</strong>
+            <div className="result-metric-card">
+              <div>
+                <span>Tổng ghế còn bán</span>
+                <strong>{flight.fares.reduce((tong, fare) => tong + fare.seatsLeft, 0)} ghế</strong>
+              </div>
+              <div className="result-metric-image">
+                <Image
+                  src="/images/vietnam-airport.jpg"
+                  alt="Nhà ga sân bay minh họa cho ghế còn bán"
+                  fill
+                  sizes="(max-width: 768px) 100vw, 32vw"
+                />
+              </div>
             </div>
             <div className="result-grid-fare-box">
               <span>Theo 3 hạng vé</span>
               <ul className="list-clean result-fare-list">
                 {flight.fares.map((fare) => (
-                  <li key={`${flight.flightId}-${fare.inventoryId}`}>
+                  <li
+                    key={`${flight.flightId}-${fare.inventoryId}`}
+                    className={`fare-list-item ${layLopMauGoiGia(fare.fareFamily)}`}
+                  >
                     <strong>{hienThiTenGoiGia(fare.fareFamily)}</strong>
                     <span>
                       {formatCurrency(fare.price)} • còn {fare.seatsLeft} ghế
@@ -1122,7 +1146,7 @@ export function SearchResultsPageClient({
             />
             <div className="card-grid card-grid-3">
               {searchData.fares.map((fare) => (
-                <article key={fare.title} className="surface-card fare-card">
+                <article key={fare.title} className={`surface-card fare-card ${layLopMauGoiGia(fare.fareFamily)}`}>
                   <div className="fare-card-image">
                     <Image
                       src={fareImageMap[fare.fareFamily].src}
@@ -1131,7 +1155,7 @@ export function SearchResultsPageClient({
                       sizes="(max-width: 820px) 100vw, 360px"
                     />
                   </div>
-                  <span className="pill">{fare.title}</span>
+                  <span className="pill fare-pill">{fare.title}</span>
                   <strong className="fare-price">{formatCurrency(fare.price)}</strong>
                   <ul className="list-clean">
                     {fare.perks.map((perk) => (

@@ -24,6 +24,14 @@
   --danger-soft: rgba(194, 79, 79, 0.14);
   --info: #1464b1;
   --info-soft: rgba(20, 100, 177, 0.14);
+  --fare-economy: #2f7d72;
+  --fare-economy-rgb: 47, 125, 114;
+  --fare-flex: #496f9f;
+  --fare-flex-rgb: 73, 111, 159;
+  --fare-business: #a77b34;
+  --fare-business-rgb: 167, 123, 52;
+  --fare-default: #5e6b7c;
+  --fare-default-rgb: 94, 107, 124;
   --shadow-soft: 0 18px 46px rgba(20, 36, 58, 0.07);
   --shadow-strong: 0 26px 80px rgba(17, 35, 59, 0.12);
   --radius-xl: 34px;
@@ -731,6 +739,45 @@ img {
   max-width: 100%;
   white-space: normal;
   text-align: center;
+}
+
+.fare-theme-economy {
+  --fare-color: var(--fare-economy);
+  --fare-rgb: var(--fare-economy-rgb);
+}
+
+.fare-theme-flex {
+  --fare-color: var(--fare-flex);
+  --fare-rgb: var(--fare-flex-rgb);
+}
+
+.fare-theme-business {
+  --fare-color: var(--fare-business);
+  --fare-rgb: var(--fare-business-rgb);
+}
+
+.fare-theme-default {
+  --fare-color: var(--fare-default);
+  --fare-rgb: var(--fare-default-rgb);
+}
+
+.fare-theme-economy,
+.fare-theme-flex,
+.fare-theme-business,
+.fare-theme-default {
+  --fare-soft: rgba(var(--fare-rgb), 0.12);
+  --fare-soft-strong: rgba(var(--fare-rgb), 0.2);
+  --fare-border: rgba(var(--fare-rgb), 0.28);
+  --fare-shadow: rgba(var(--fare-rgb), 0.14);
+}
+
+.fare-pill,
+.fare-theme-economy .pill,
+.fare-theme-flex .pill,
+.fare-theme-business .pill,
+.fare-theme-default .pill {
+  background: var(--fare-soft);
+  color: var(--fare-color);
 }
 
 .assurance-chip {
@@ -1816,6 +1863,50 @@ img {
   white-space: nowrap;
 }
 
+.booking-fare-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.booking-fare-grid .result-card {
+  gap: 14px;
+  min-height: auto;
+  padding: 22px;
+}
+
+.booking-fare-grid .result-card.fare-theme-economy,
+.booking-fare-grid .result-card.fare-theme-flex,
+.booking-fare-grid .result-card.fare-theme-business,
+.booking-fare-grid .result-card.fare-theme-default {
+  border-color: var(--fare-border);
+  background:
+    radial-gradient(circle at top right, var(--fare-soft-strong), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(var(--fare-rgb), 0.08));
+}
+
+.booking-fare-grid .result-card.is-selected {
+  border-color: var(--fare-color);
+  box-shadow: 0 20px 46px var(--fare-shadow);
+}
+
+.booking-fare-grid .result-card .section-eyebrow,
+.booking-fare-grid .result-card h3 {
+  color: var(--fare-color);
+}
+
+.booking-fare-grid .result-card h3 {
+  font-size: clamp(1.08rem, 1.35vw, 1.24rem);
+}
+
+.booking-fare-grid .result-grid-rich {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.booking-fare-grid .result-grid > div {
+  padding: 12px 14px;
+}
+
 .seat-map-card {
   position: relative;
   display: grid;
@@ -2569,6 +2660,31 @@ img {
   background: rgba(18, 61, 105, 0.05);
 }
 
+.result-grid > .result-metric-card {
+  display: grid;
+  grid-template-rows: auto minmax(132px, 1fr);
+  gap: 14px;
+  overflow: hidden;
+}
+
+.result-metric-image {
+  position: relative;
+  min-height: 132px;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.result-metric-image::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(5, 31, 61, 0), rgba(5, 31, 61, 0.18));
+}
+
+.result-metric-image img {
+  object-fit: cover;
+}
+
 .result-grid-rich {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -2598,6 +2714,27 @@ img {
   font-size: 0.92rem;
 }
 
+.fare-list-item {
+  position: relative;
+  padding-left: 22px;
+}
+
+.fare-list-item::before {
+  content: "";
+  position: absolute;
+  top: 0.42em;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--fare-color);
+  box-shadow: 0 0 0 4px var(--fare-soft);
+}
+
+.fare-list-item strong {
+  color: var(--fare-color);
+}
+
 .result-actions {
   display: flex;
   justify-content: space-between;
@@ -2610,6 +2747,21 @@ img {
 
 .fare-card {
   min-height: 250px;
+}
+
+.fare-card.fare-theme-economy,
+.fare-card.fare-theme-flex,
+.fare-card.fare-theme-business,
+.fare-card.fare-theme-default {
+  border-color: var(--fare-border);
+  background:
+    radial-gradient(circle at top right, var(--fare-soft-strong), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(var(--fare-rgb), 0.07));
+  box-shadow: 0 18px 42px rgba(var(--fare-rgb), 0.08);
+}
+
+.fare-card .fare-price {
+  color: var(--fare-color);
 }
 
 .fare-card-image {
@@ -4251,6 +4403,10 @@ th {
     grid-template-columns: 1fr;
   }
 
+  .booking-fare-grid .result-grid-rich {
+    grid-template-columns: 1fr;
+  }
+
   .result-grid > div {
     padding: 12px 14px;
   }
@@ -4958,6 +5114,23 @@ th {
   gap: 10px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 247, 252, 0.9));
+}
+
+.admin-nested-card.fare-theme-economy,
+.admin-nested-card.fare-theme-flex,
+.admin-nested-card.fare-theme-business,
+.admin-nested-card.fare-theme-default {
+  border-color: var(--fare-border);
+  background:
+    linear-gradient(90deg, var(--fare-soft), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(var(--fare-rgb), 0.06));
+}
+
+.admin-nested-card.fare-theme-economy input,
+.admin-nested-card.fare-theme-flex input,
+.admin-nested-card.fare-theme-business input,
+.admin-nested-card.fare-theme-default input {
+  border-color: var(--fare-border);
 }
 
 .cms-table-card {
