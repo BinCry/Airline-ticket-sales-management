@@ -350,10 +350,11 @@ function taoTheKetQua(
                 <span>Giá mở đầu</span>
                 <strong>{formatCurrency(flight.baseFare)}</strong>
               </div>
+              {/* Đổi hình sang invoice.jpg — minh họa giá/thanh toán, phù hợp với "Giá mở đầu" */}
               <div className="result-metric-image">
                 <Image
-                  src="/images/pho-thong-tiet-kiem-vietnam-airline-3.jpg"
-                  alt="Khoang ghế phổ thông minh họa cho giá mở đầu"
+                  src="/images/ticket.jpg"
+                  alt="Minh họa giá vé và thanh toán"
                   fill
                   sizes="(max-width: 768px) 100vw, 32vw"
                 />
@@ -364,10 +365,11 @@ function taoTheKetQua(
                 <span>Tổng ghế còn bán</span>
                 <strong>{flight.fares.reduce((tong, fare) => tong + fare.seatsLeft, 0)} ghế</strong>
               </div>
+              {/* Đổi hình sang khoang ghế máy bay — phù hợp với "Tổng ghế còn bán" */}
               <div className="result-metric-image">
                 <Image
-                  src="/images/vietnam-airport.jpg"
-                  alt="Nhà ga sân bay minh họa cho ghế còn bán"
+                  src="/images/pho-thong-tiet-kiem-vietnam-airline-3.jpg"
+                  alt="Khoang ghế máy bay minh họa cho số ghế còn bán"
                   fill
                   sizes="(max-width: 768px) 100vw, 32vw"
                 />
@@ -404,11 +406,10 @@ function taoTheKetQua(
               <Link
                 href={taoDuongDanChonChieuDi(criteria, flight)}
                 scroll={false}
-                className={`button ${
-                  selectedOutboundFlight?.flightId === flight.flightId
+                className={`button ${selectedOutboundFlight?.flightId === flight.flightId
                     ? "button-secondary"
                     : "button-primary"
-                }`}
+                  }`}
               >
                 {selectedOutboundFlight?.flightId === flight.flightId
                   ? "Đã chọn chiều đi"
