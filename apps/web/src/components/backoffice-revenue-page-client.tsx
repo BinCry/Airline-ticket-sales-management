@@ -68,6 +68,8 @@ export function BackofficeRevenuePageClient() {
   const [granularity, setGranularity] = useState<BackofficeRevenueGranularity>("day");
   const [selectedMonth, setSelectedMonth] = useState(getCurrentMonthValue);
   const [selectedYear, setSelectedYear] = useState(getCurrentYearValue);
+  const [appliedYear, setAppliedYear] = useState(getCurrentYearValue);
+  const [reloadKey, setReloadKey] = useState(0);
   const [dashboard, setDashboard] = useState<BackofficeRevenueDashboard>(() =>
     createFallbackDashboard("day")
   );
@@ -81,8 +83,8 @@ export function BackofficeRevenuePageClient() {
       return;
     }
 
-    void loadDashboard(accessToken, granularity, resolveSelectedPeriod());
-  }, [accessToken, granularity, selectedMonth, selectedYear]);
+    void loadDashboard(accessToken, granularity, resolveAppliedPeriod());
+  }, [accessToken, granularity, selectedMonth, appliedYear, reloadKey]);
 
   const maxBarValue = useMemo(() => {
     const maxBucketValue = Math.max(
@@ -117,8 +119,25 @@ export function BackofficeRevenuePageClient() {
     }
   }
 
-  function resolveSelectedPeriod() {
-    return granularity === "month" ? selectedYear : selectedMonth;
+  function resolveAppliedPeriod() {
+    return granularity === "month" ? appliedYear : selectedMonth;
+  }
+
+  function normalizeSelectedYear() {
+    return selectedYear.trim() || getCurrentYearValue();
+  }
+
+  function applySelectedPeriod() {
+    if (granularity === "month") {
+      const nextYear = normalizeSelectedYear();
+      setSelectedYear(nextYear);
+      if (nextYear !== appliedYear) {
+        setAppliedYear(nextYear);
+        return;
+      }
+    }
+
+    setReloadKey((currentReloadKey) => currentReloadKey + 1);
   }
 
   return (
@@ -170,7 +189,12 @@ export function BackofficeRevenuePageClient() {
                 max="2100"
                 step="1"
                 value={selectedYear}
-                onChange={(event) => setSelectedYear(event.target.value || getCurrentYearValue())}
+                onChange={(event) => setSelectedYear(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    applySelectedPeriod();
+                  }
+                }}
               />
             </label>
           )}
@@ -178,7 +202,7 @@ export function BackofficeRevenuePageClient() {
             type="button"
             className="button button-secondary"
             disabled={!accessToken || state === "loading"}
-            onClick={() => accessToken ? void loadDashboard(accessToken, granularity, resolveSelectedPeriod()) : undefined}
+            onClick={applySelectedPeriod}
           >
             {state === "loading" ? "Đang tải..." : "Tải lại"}
           </button>
