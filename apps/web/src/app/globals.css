@@ -2010,33 +2010,36 @@ img {
 
 .checkout-floating-countdown {
   position: fixed;
-  top: 92px;
-  right: 28px;
+  top: 118px;
+  right: 32px;
   z-index: 90;
   pointer-events: none;
 }
 
 .checkout-floating-countdown .hold-countdown {
   margin-top: 0;
-  padding: 13px 18px;
-  border-color: rgba(18, 61, 105, 0.16);
+  gap: 14px;
+  padding: 16px 22px;
+  border-color: rgba(230, 194, 113, 0.72);
   border-radius: 999px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(240, 246, 251, 0.92));
-  color: var(--primary);
+    linear-gradient(135deg, rgba(255, 248, 225, 0.98), rgba(230, 194, 113, 0.94));
+  color: #123d69;
   box-shadow:
-    0 22px 48px rgba(5, 18, 33, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+    0 24px 54px rgba(5, 18, 33, 0.24),
+    0 8px 22px rgba(202, 164, 95, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(14px);
 }
 
 .checkout-floating-countdown .hold-countdown span {
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+  opacity: 0.86;
 }
 
 .checkout-floating-countdown .hold-countdown strong {
-  font-size: clamp(1.2rem, 1.8vw, 1.52rem);
+  font-size: clamp(1.42rem, 2vw, 1.78rem);
 }
 
 .checkout-floating-countdown .hold-countdown-urgent {
@@ -5760,12 +5763,13 @@ th {
   }
 
   .checkout-floating-countdown {
-    top: 76px;
-    right: 14px;
+    top: 92px;
+    right: 12px;
   }
 
   .checkout-floating-countdown .hold-countdown {
-    padding: 10px 13px;
+    gap: 10px;
+    padding: 12px 15px;
   }
 
   .booking-modal-actions,
