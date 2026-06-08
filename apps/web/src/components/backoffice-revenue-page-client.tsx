@@ -179,7 +179,7 @@ export function BackofficeRevenuePageClient() {
             <span className="pill">Doanh thu thực</span>
           </div>
 
-          <div className="revenue-chart">
+          <div className={`revenue-chart revenue-chart-${dashboard.granularity}`}>
             {dashboard.buckets.length > 0 ? (
               dashboard.buckets.map((bucket) => {
                 const barHeight = Math.max(6, Math.round((Math.abs(bucket.netRevenue) / maxBarValue) * 100));
@@ -197,9 +197,14 @@ export function BackofficeRevenuePageClient() {
                       />
                     </div>
                     <strong>{bucket.label}</strong>
-                    <small>
-                      Bán {bucket.soldTicketCount} / Hoàn {bucket.refundedTicketCount}
-                    </small>
+                    <div className="revenue-chart-tooltip" role="status">
+                      <span>{bucket.label}</span>
+                      <strong>{formatCurrency(bucket.netRevenue)}</strong>
+                      <small>Đã thanh toán: {formatCurrency(bucket.paidAmount)}</small>
+                      <small>Đã hoàn tiền: {formatCurrency(bucket.refundedAmount)}</small>
+                      <small>Vé bán: {bucket.soldTicketCount}</small>
+                      <small>Vé hoàn: {bucket.refundedTicketCount}</small>
+                    </div>
                   </div>
                 );
               })
