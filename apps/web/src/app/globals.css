@@ -2445,11 +2445,60 @@ img {
 .profile-avatar-actions {
   display: grid;
   gap: 8px;
+  flex: 1 1 360px;
+  min-width: 0;
 }
 
 .profile-avatar-actions p {
   margin: 0;
   color: var(--muted);
+}
+
+.profile-avatar-button-row {
+  width: 100%;
+  align-items: center;
+}
+
+.profile-logout-button {
+  margin-left: auto;
+  border: 1px solid rgba(184, 28, 28, 0.88);
+  background: #c62828;
+  color: #fff;
+  box-shadow: 0 16px 34px rgba(184, 28, 28, 0.22);
+}
+
+.profile-password-form {
+  margin-top: 18px;
+}
+
+.profile-password-form-head {
+  align-items: flex-start;
+}
+
+.profile-password-form-head > div {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-password-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 1.4rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.profile-password-close:hover {
+  color: #c62828;
+  transform: translateY(-1px);
 }
 
 .action-card-head {
@@ -4739,6 +4788,10 @@ th {
 
   .auth-action-row .button {
     width: 100%;
+  }
+
+  .profile-logout-button {
+    margin-left: 0;
   }
 
   .search-page-hero .page-hero-stat-grid {

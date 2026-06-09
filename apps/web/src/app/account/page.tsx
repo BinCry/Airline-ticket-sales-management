@@ -313,6 +313,7 @@ export default function AccountPage() {
   const [passengerError, setPassengerError] = useState<string | null>(null);
   const [passengerForm, setPassengerForm] = useState<UpsertMyPassengerPayload>(EMPTY_PASSENGER_FORM);
   const [passwordForm, setPasswordForm] = useState(EMPTY_PASSWORD_FORM);
+  const [isPasswordFormVisible, setIsPasswordFormVisible] = useState(false);
   const [editingPassengerId, setEditingPassengerId] = useState<number | null>(null);
   const [passengerActionError, setPassengerActionError] = useState<string | null>(null);
   const [passengerActionSuccess, setPassengerActionSuccess] = useState<string | null>(null);
@@ -360,6 +361,7 @@ export default function AccountPage() {
       setEditingPassengerId(null);
       setPassengerForm(EMPTY_PASSENGER_FORM);
       setPasswordForm(EMPTY_PASSWORD_FORM);
+      setIsPasswordFormVisible(false);
       setIsLoadingProfile(false);
       setIsLoadingPassengers(false);
       setIsLoadingLoyalty(false);
@@ -790,6 +792,20 @@ export default function AccountPage() {
     }));
   }
 
+  function togglePasswordForm() {
+    setIsPasswordFormVisible((currentIsPasswordFormVisible) => {
+      const nextIsPasswordFormVisible = !currentIsPasswordFormVisible;
+
+      if (!nextIsPasswordFormVisible) {
+        setPasswordForm(EMPTY_PASSWORD_FORM);
+        setPasswordActionError(null);
+        setPasswordActionSuccess(null);
+      }
+
+      return nextIsPasswordFormVisible;
+    });
+  }
+
   async function handlePasswordSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1083,7 +1099,7 @@ export default function AccountPage() {
                   <div className="profile-avatar-actions">
                     <strong>Ảnh đại diện</strong>
                     <p>Hỗ trợ JPG, PNG hoặc WEBP, tối đa 2 MB.</p>
-                    <div className="auth-action-row">
+                    <div className="auth-action-row profile-avatar-button-row">
                       <label className="button button-secondary">
                         {isUploadingAvatar ? "Đang tải ảnh..." : "Đổi ảnh đại diện"}
                         <input
@@ -1097,6 +1113,14 @@ export default function AccountPage() {
                       <button
                         type="button"
                         className="button button-secondary"
+                        onClick={() => setIsPasswordFormVisible(true)}
+                        aria-expanded={isPasswordFormVisible}
+                      >
+                        Đổi mật khẩu
+                      </button>
+                      <button
+                        type="button"
+                        className="button profile-logout-button"
                         onClick={handleLogout}
                         disabled={isLoggingOut}
                       >
@@ -1184,11 +1208,21 @@ export default function AccountPage() {
               </form>
             ) : null}
 
-            {activeProfile ? (
-              <form className="surface-card" onSubmit={handlePasswordSubmit}>
-                <div className="auth-note-head">
-                  <h3>Đổi mật khẩu</h3>
-                  <span className="pill">Yêu cầu đăng nhập lại sau khi đổi</span>
+            {activeProfile && isPasswordFormVisible ? (
+              <form className="surface-card profile-password-form" onSubmit={handlePasswordSubmit}>
+                <div className="auth-note-head profile-password-form-head">
+                  <div>
+                    <h3>Đổi mật khẩu</h3>
+                    <span className="pill">Yêu cầu đăng nhập lại sau khi đổi</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="profile-password-close"
+                    onClick={togglePasswordForm}
+                    aria-label="Đóng form đổi mật khẩu"
+                  >
+                    ×
+                  </button>
                 </div>
                 <div className="auth-field-grid">
                   <PasswordField
