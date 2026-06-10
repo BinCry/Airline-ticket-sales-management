@@ -74,6 +74,72 @@ function buildFallbackErrorMessage(mode: ChatMode) {
 
 const starterPromptLimit = 2;
 
+function ResetIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="chatbot-icon"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M20 6v5h-5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+      <path
+        d="M4 18v-5h5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+      <path
+        d="M6.1 9a7 7 0 0 1 11.8-2.6L20 8.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+      <path
+        d="M17.9 15a7 7 0 0 1-11.8 2.6L4 15.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function SendIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="chatbot-icon"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="m21 3-6.8 18-3.6-8.1L3 9.3 21 3Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+      <path
+        d="m10.6 12.9 4.1-4.1"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
 export function ChatbotWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [activeMode, setActiveMode] = useState<ChatMode>("support");
@@ -264,14 +330,25 @@ export function ChatbotWidget() {
                 ))}
               </div>
             </div>
-            <button
-              type="button"
-              className="icon-button"
-              onClick={() => setIsOpen(false)}
-              aria-label="Đóng trợ lý hỗ trợ"
-            >
-              ×
-            </button>
+            <div className="chatbot-header-actions">
+              <button
+                type="button"
+                className="icon-button chatbot-header-icon chatbot-reset-button"
+                onClick={() => resetConversation(activeMode)}
+                aria-label="Làm mới đoạn chat"
+                disabled={isPending}
+              >
+                <ResetIcon />
+              </button>
+              <button
+                type="button"
+                className="icon-button chatbot-header-icon chatbot-close-button"
+                onClick={() => setIsOpen(false)}
+                aria-label="Đóng trợ lý hỗ trợ"
+              >
+                ×
+              </button>
+            </div>
           </div>
           <div
             className={`chatbot-body${showPromptGrid ? " chatbot-body-has-starter" : ""}`}
@@ -337,39 +414,32 @@ export function ChatbotWidget() {
                 void submitMessage(activeDraft);
               }}
             >
-              <textarea
-                value={activeDraft}
-                onChange={(event) =>
-                  setDraftByMode((previousState) => ({
-                    ...previousState,
-                    [activeMode]: event.target.value
-                  }))
-                }
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    void submitMessage(activeDraft);
+              <div className="chatbot-input-wrap">
+                <textarea
+                  value={activeDraft}
+                  onChange={(event) =>
+                    setDraftByMode((previousState) => ({
+                      ...previousState,
+                      [activeMode]: event.target.value
+                    }))
                   }
-                }}
-                className="chatbot-input"
-                placeholder={activeConfig.placeholder}
-                rows={showPromptGrid ? 1 : 2}
-              />
-              <div className="chatbot-composer-actions">
-                <button
-                  type="button"
-                  className="chatbot-clear-button"
-                  onClick={() => resetConversation(activeMode)}
-                  disabled={isPending}
-                >
-                  Làm mới đoạn chat
-                </button>
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      void submitMessage(activeDraft);
+                    }
+                  }}
+                  className="chatbot-input"
+                  placeholder={activeConfig.placeholder}
+                  rows={showPromptGrid ? 1 : 2}
+                />
                 <button
                   type="submit"
-                  className="button button-primary chatbot-send-button"
-                  disabled={isPending}
+                  className="chatbot-send-icon-button"
+                  aria-label={activeConfig.submitLabel}
+                  disabled={isPending || !activeDraft.trim()}
                 >
-                  {isPending ? "Đang trả lời..." : activeConfig.submitLabel}
+                  <SendIcon />
                 </button>
               </div>
             </form>
