@@ -63,6 +63,10 @@ export function SiteHeader() {
 
   const accountDisplayName = authSession?.user.displayName ?? null;
   const primaryRole = authSession?.user.roles[0] ?? null;
+  const usesStaffAccountMenu =
+    authSession?.user.roles.some(
+      (role) => role === "operations_staff" || role === "customer_support"
+    ) ?? false;
   const isStaffRole =
     primaryRole === "customer_support" || primaryRole === "operations_staff";
   const shortStaffLabelByRole: Record<string, string> = {
@@ -167,36 +171,42 @@ export function SiteHeader() {
                 <small>{primaryRoleLabel ?? "Khách hàng"}</small>
               </div>
             </div>
-            <div className="account-menu-group">
-              <Link href="/account" role="menuitem">
-                Thông tin cá nhân
-              </Link>
-              <Link href="/account#hanh-khach" role="menuitem">
-                Hành khách
-              </Link>
-              <Link href="/account#thong-bao" role="menuitem">
-                Thông báo
-              </Link>
-              <Link href="/account#voucher" role="menuitem">
-                Voucher / Điểm thưởng
-              </Link>
-            </div>
-            <div className="account-menu-group">
-              <Link href="/manage-booking" role="menuitem">
-                Vé của tôi
-              </Link>
-              <Link href="/check-in" role="menuitem">
-                Làm thủ tục
-              </Link>
-              <Link href="/flight-status" role="menuitem">
-                Trạng thái chuyến bay
-              </Link>
-              {canOpenBackoffice ? (
-                <Link href="/backoffice" role="menuitem">
-                  Backoffice
+            {usesStaffAccountMenu ? (
+              <div className="account-menu-group">
+                <Link href="/account" role="menuitem">
+                  Thông tin cá nhân
                 </Link>
-              ) : null}
-            </div>
+                {canOpenBackoffice ? (
+                  <Link href="/backoffice" role="menuitem">
+                    Backoffice
+                  </Link>
+                ) : null}
+              </div>
+            ) : (
+              <>
+                <div className="account-menu-group">
+                  <Link href="/account" role="menuitem">
+                    Thông tin cá nhân
+                  </Link>
+                </div>
+                <div className="account-menu-group">
+                  <Link href="/manage-booking" role="menuitem">
+                    Vé của tôi
+                  </Link>
+                  <Link href="/check-in" role="menuitem">
+                    Làm thủ tục
+                  </Link>
+                  <Link href="/flight-status" role="menuitem">
+                    Trạng thái chuyến bay
+                  </Link>
+                  {canOpenBackoffice ? (
+                    <Link href="/backoffice" role="menuitem">
+                      Backoffice
+                    </Link>
+                  ) : null}
+                </div>
+              </>
+            )}
             <button
               type="button"
               className="account-menu-logout"
