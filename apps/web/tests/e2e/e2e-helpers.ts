@@ -9,6 +9,7 @@ type SeedAuthSessionOptions = {
   email?: string;
   displayName?: string;
   phone?: string | null;
+  avatarUrl?: string | null;
 };
 
 function encodeBase64Url(value: string) {
@@ -51,7 +52,7 @@ export async function seedAuthSession(page: Page, options: SeedAuthSessionOption
       email: options.email ?? "staff@vietnam-airlines.vn",
       displayName: options.displayName ?? "Nhân viên backoffice",
       phone: options.phone ?? "0900000001",
-      avatarUrl: null,
+      avatarUrl: options.avatarUrl ?? null,
       emailVerified: true,
       roles: options.roles,
       permissions: options.permissions

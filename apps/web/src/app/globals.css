@@ -326,6 +326,7 @@ img {
 }
 
 .account-menu-avatar {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -337,6 +338,15 @@ img {
   color: #fff;
   font-size: 0.78rem;
   font-weight: 900;
+  overflow: hidden;
+}
+
+.account-menu-avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .account-menu-name {
@@ -1409,6 +1419,10 @@ img {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.staff-shortcut-grid {
+  grid-template-columns: 1fr;
+}
+
 .card-grid-3,
 .metric-grid,
 .step-grid,
@@ -1550,6 +1564,10 @@ img {
 
 .feature-card-top {
   margin-bottom: 4px;
+}
+
+.module-card-head .pill {
+  margin-left: auto;
 }
 
 .feature-card-rich p,
@@ -1885,11 +1903,52 @@ img {
 }
 
 .account-modal-card {
-  width: min(720px, 100%);
+  display: grid;
+  gap: 22px;
+  width: min(680px, 100%);
   max-height: min(82dvh, 760px);
+  padding: 28px;
   overflow-y: auto;
-  border-radius: var(--radius-md);
+  border-radius: 8px;
   box-shadow: 0 34px 100px rgba(6, 18, 35, 0.28);
+}
+
+.account-modal-card > .auth-note-head {
+  align-items: flex-start;
+  flex-wrap: nowrap;
+  gap: 20px;
+}
+
+.account-modal-card > .auth-note-head > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+}
+
+.account-modal-card > .auth-note-head h3 {
+  margin: 0;
+  font-size: 1.28rem;
+  line-height: 1.25;
+  overflow-wrap: normal;
+}
+
+.account-modal-card .auth-sync-pill {
+  justify-self: start;
+  transform: none;
+}
+
+.account-modal-card > .auth-field-grid {
+  gap: 18px;
+}
+
+.account-modal-card > .auth-action-row {
+  margin-top: 0;
+  padding-top: 2px;
+}
+
+.account-modal-card .field input {
+  min-height: 54px;
+  border-radius: 8px;
 }
 
 .account-section-actions {
@@ -2913,13 +2972,13 @@ img {
 }
 
 .profile-avatar-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
   align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
-  padding: 16px;
+  gap: 22px;
+  padding: 20px;
   border: 1px solid rgba(18, 61, 105, 0.12);
-  border-radius: 22px;
+  border-radius: 8px;
   background: rgba(18, 61, 105, 0.04);
 }
 
@@ -2927,9 +2986,8 @@ img {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 88px;
-  height: 88px;
-  flex: 0 0 88px;
+  width: 104px;
+  height: 104px;
   overflow: hidden;
   border-radius: 999px;
   background: linear-gradient(135deg, var(--primary), var(--accent));
@@ -2947,7 +3005,6 @@ img {
 .profile-avatar-actions {
   display: grid;
   gap: 8px;
-  flex: 1 1 360px;
   min-width: 0;
 }
 
@@ -2959,6 +3016,10 @@ img {
 .profile-avatar-button-row {
   width: 100%;
   align-items: center;
+}
+
+.profile-avatar-button-row .button {
+  min-width: 132px;
 }
 
 .profile-password-form {
@@ -2978,11 +3039,12 @@ img {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  border: 0;
-  background: transparent;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border: 1px solid rgba(18, 61, 105, 0.12);
+  border-radius: 50%;
+  background: rgba(18, 61, 105, 0.04);
   color: var(--primary);
   cursor: pointer;
   font-size: 1.4rem;
@@ -3704,7 +3766,7 @@ img {
 }
 
 .module-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .module-card {
@@ -4900,7 +4962,6 @@ th {
   .metric-grid,
   .step-grid,
   .command-metrics,
-  .module-grid,
   .destination-editorial-grid,
   .auth-stat-grid,
   .auth-progress {
@@ -5432,6 +5493,45 @@ th {
   .chatbot-input {
     min-height: 48px;
     padding: 9px 50px 9px 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .account-modal-backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .account-modal-card {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    gap: 18px;
+    padding: 20px;
+  }
+
+  .account-modal-card > .auth-note-head {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .account-modal-card > .auth-note-head h3 {
+    font-size: 1.12rem;
+  }
+
+  .profile-avatar-row {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    padding: 18px;
+    text-align: center;
+  }
+
+  .profile-avatar-actions {
+    width: 100%;
+  }
+
+  .profile-avatar-button-row .button {
+    width: 100%;
   }
 }
 
