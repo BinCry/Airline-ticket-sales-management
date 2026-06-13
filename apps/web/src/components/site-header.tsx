@@ -13,8 +13,23 @@ import {
   type AuthSession
 } from "@/lib/auth-session";
 import { hasAnyBackofficeAccess, ROLE_LABELS } from "@/lib/access-control";
+import { getApiBaseUrl } from "@/lib/api-client";
 import { utilityLinks } from "@/lib/public-content";
 import { buildMainNavigation, isMainNavigationLinkActive } from "@/lib/site-navigation";
+
+const DEFAULT_AVATAR_URL = "/images/default-avatar.svg";
+
+function resolveAvatarUrl(avatarUrl: string | null | undefined) {
+  if (!avatarUrl) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(avatarUrl)) {
+    return avatarUrl;
+  }
+
+  return `${getApiBaseUrl()}${avatarUrl.startsWith("/") ? avatarUrl : `/${avatarUrl}`}`;
+}
 
 export function SiteHeader() {
   const router = useRouter();
@@ -23,6 +38,7 @@ export function SiteHeader() {
   const [isAccountPanelOpen, setIsAccountPanelOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMobileOpen(false);
@@ -31,6 +47,7 @@ export function SiteHeader() {
 
   useEffect(() => {
     function syncAuthSession() {
+      setFailedAvatarUrl(null);
       setAuthSession(loadActiveAuthSession());
     }
 
@@ -64,7 +81,9 @@ export function SiteHeader() {
     accountDisplayName
       ? (isStaffRole ? (shortStaffLabel ?? primaryRoleLabel ?? accountDisplayName) : accountDisplayName)
       : null;
-  const accountInitial = accountDisplayName?.slice(0, 1).toUpperCase() ?? "?";
+  const accountAvatarUrl = resolveAvatarUrl(authSession?.user.avatarUrl);
+  const shouldRenderAccountAvatar =
+    accountAvatarUrl !== null && accountAvatarUrl !== failedAvatarUrl;
   const permissions = authSession?.user.permissions ?? [];
   const canOpenBackoffice = hasAnyBackofficeAccess(permissions);
   const navigationLinks = buildMainNavigation(permissions).filter(
@@ -108,7 +127,19 @@ export function SiteHeader() {
           title={accountButtonLabel}
         >
           <span className="account-menu-avatar" aria-hidden="true">
-            {accountInitial}
+            <img
+              className="account-menu-avatar-default"
+              src={DEFAULT_AVATAR_URL}
+              alt=""
+            />
+            {shouldRenderAccountAvatar ? (
+              <img
+                className="account-menu-avatar-custom"
+                src={accountAvatarUrl}
+                alt=""
+                onError={() => setFailedAvatarUrl(accountAvatarUrl)}
+              />
+            ) : null}
           </span>
           <span className="account-menu-name">{accountButtonLabel}</span>
         </button>
@@ -116,7 +147,19 @@ export function SiteHeader() {
           <div id={panelId} className="account-menu-panel" role="menu">
             <div className="account-menu-identity">
               <span className="account-menu-avatar account-menu-avatar-large" aria-hidden="true">
-                {accountInitial}
+                <img
+                  className="account-menu-avatar-default"
+                  src={DEFAULT_AVATAR_URL}
+                  alt=""
+                />
+                {shouldRenderAccountAvatar ? (
+                  <img
+                    className="account-menu-avatar-custom"
+                    src={accountAvatarUrl}
+                    alt=""
+                    onError={() => setFailedAvatarUrl(accountAvatarUrl)}
+                  />
+                ) : null}
               </span>
               <div>
                 <strong>{authSession.user.displayName}</strong>

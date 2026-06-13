@@ -1090,14 +1090,14 @@ export default function AccountPage() {
           <aside className="account-overview-card" aria-label="Tổng quan tài khoản">
             <div className="account-overview-head">
               <div className="profile-avatar-preview account-overview-avatar">
-                {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt={`Ảnh đại diện của ${activeProfile?.displayName ?? "tài khoản"}`}
-                  />
-                ) : (
-                  <span>{activeProfile?.displayName.slice(0, 1).toUpperCase() ?? "?"}</span>
-                )}
+                <img
+                  src={avatarUrl ?? "/images/default-avatar.svg"}
+                  alt={`Ảnh đại diện của ${activeProfile?.displayName ?? "tài khoản"}`}
+                  onError={(event) => {
+                    event.currentTarget.onerror = null;
+                    event.currentTarget.src = "/images/default-avatar.svg";
+                  }}
+                />
               </div>
               <div>
                 <span className="pill">{isStaffProfile ? "Nội bộ" : "Hành khách"}</span>
@@ -1195,14 +1195,14 @@ export default function AccountPage() {
                 </div>
                 <div className="profile-avatar-row">
                   <div className="profile-avatar-preview">
-                    {avatarUrl ? (
-                      <img
-                        src={avatarUrl}
-                        alt={`Ảnh đại diện của ${activeProfile.displayName}`}
-                      />
-                    ) : (
-                      <span>{activeProfile.displayName.slice(0, 1).toUpperCase()}</span>
-                    )}
+                    <img
+                      src={avatarUrl ?? "/images/default-avatar.svg"}
+                      alt={`Ảnh đại diện của ${activeProfile.displayName}`}
+                      onError={(event) => {
+                        event.currentTarget.onerror = null;
+                        event.currentTarget.src = "/images/default-avatar.svg";
+                      }}
+                    />
                   </div>
                   <div className="profile-avatar-actions">
                     <strong>Ảnh đại diện hiện tại</strong>
