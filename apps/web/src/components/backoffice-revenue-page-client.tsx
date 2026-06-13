@@ -376,14 +376,6 @@ export function BackofficeRevenuePageClient() {
                     </div>
                   ))}
                 </div>
-                <div className="revenue-chart-labels">
-                  {dashboard.buckets.map((bucket) => (
-                    <span key={bucket.key}>
-                      <strong>{bucket.label}</strong>
-                      <small>{formatCompactCurrency(bucket.netRevenue)}</small>
-                    </span>
-                  ))}
-                </div>
               </>
             ) : (
               <article className="booking-inline-info revenue-empty-state">
