@@ -13,8 +13,23 @@ import {
   type AuthSession
 } from "@/lib/auth-session";
 import { hasAnyBackofficeAccess, ROLE_LABELS } from "@/lib/access-control";
+import { getApiBaseUrl } from "@/lib/api-client";
 import { utilityLinks } from "@/lib/public-content";
 import { buildMainNavigation, isMainNavigationLinkActive } from "@/lib/site-navigation";
+
+const DEFAULT_AVATAR_URL = "/images/default-avatar.svg";
+
+function resolveAvatarUrl(avatarUrl: string | null | undefined) {
+  if (!avatarUrl) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(avatarUrl)) {
+    return avatarUrl;
+  }
+
+  return `${getApiBaseUrl()}${avatarUrl.startsWith("/") ? avatarUrl : `/${avatarUrl}`}`;
+}
 
 export function SiteHeader() {
   const router = useRouter();
@@ -23,6 +38,7 @@ export function SiteHeader() {
   const [isAccountPanelOpen, setIsAccountPanelOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMobileOpen(false);
@@ -31,6 +47,7 @@ export function SiteHeader() {
 
   useEffect(() => {
     function syncAuthSession() {
+      setFailedAvatarUrl(null);
       setAuthSession(loadActiveAuthSession());
     }
 
@@ -46,6 +63,10 @@ export function SiteHeader() {
 
   const accountDisplayName = authSession?.user.displayName ?? null;
   const primaryRole = authSession?.user.roles[0] ?? null;
+  const usesStaffAccountMenu =
+    authSession?.user.roles.some(
+      (role) => role === "operations_staff" || role === "customer_support"
+    ) ?? false;
   const isStaffRole =
     primaryRole === "customer_support" || primaryRole === "operations_staff";
   const shortStaffLabelByRole: Record<string, string> = {
@@ -64,7 +85,9 @@ export function SiteHeader() {
     accountDisplayName
       ? (isStaffRole ? (shortStaffLabel ?? primaryRoleLabel ?? accountDisplayName) : accountDisplayName)
       : null;
-  const accountInitial = accountDisplayName?.slice(0, 1).toUpperCase() ?? "?";
+  const accountAvatarUrl = resolveAvatarUrl(authSession?.user.avatarUrl);
+  const shouldRenderAccountAvatar =
+    accountAvatarUrl !== null && accountAvatarUrl !== failedAvatarUrl;
   const permissions = authSession?.user.permissions ?? [];
   const canOpenBackoffice = hasAnyBackofficeAccess(permissions);
   const navigationLinks = buildMainNavigation(permissions).filter(
@@ -108,7 +131,19 @@ export function SiteHeader() {
           title={accountButtonLabel}
         >
           <span className="account-menu-avatar" aria-hidden="true">
-            {accountInitial}
+            <img
+              className="account-menu-avatar-default"
+              src={DEFAULT_AVATAR_URL}
+              alt=""
+            />
+            {shouldRenderAccountAvatar ? (
+              <img
+                className="account-menu-avatar-custom"
+                src={accountAvatarUrl}
+                alt=""
+                onError={() => setFailedAvatarUrl(accountAvatarUrl)}
+              />
+            ) : null}
           </span>
           <span className="account-menu-name">{accountButtonLabel}</span>
         </button>
@@ -116,7 +151,19 @@ export function SiteHeader() {
           <div id={panelId} className="account-menu-panel" role="menu">
             <div className="account-menu-identity">
               <span className="account-menu-avatar account-menu-avatar-large" aria-hidden="true">
-                {accountInitial}
+                <img
+                  className="account-menu-avatar-default"
+                  src={DEFAULT_AVATAR_URL}
+                  alt=""
+                />
+                {shouldRenderAccountAvatar ? (
+                  <img
+                    className="account-menu-avatar-custom"
+                    src={accountAvatarUrl}
+                    alt=""
+                    onError={() => setFailedAvatarUrl(accountAvatarUrl)}
+                  />
+                ) : null}
               </span>
               <div>
                 <strong>{authSession.user.displayName}</strong>
@@ -124,36 +171,42 @@ export function SiteHeader() {
                 <small>{primaryRoleLabel ?? "Khách hàng"}</small>
               </div>
             </div>
-            <div className="account-menu-group">
-              <Link href="/account" role="menuitem">
-                Thông tin cá nhân
-              </Link>
-              <Link href="/account#hanh-khach" role="menuitem">
-                Hành khách
-              </Link>
-              <Link href="/account#thong-bao" role="menuitem">
-                Thông báo
-              </Link>
-              <Link href="/account#voucher" role="menuitem">
-                Voucher / Điểm thưởng
-              </Link>
-            </div>
-            <div className="account-menu-group">
-              <Link href="/manage-booking" role="menuitem">
-                Vé của tôi
-              </Link>
-              <Link href="/check-in" role="menuitem">
-                Làm thủ tục
-              </Link>
-              <Link href="/flight-status" role="menuitem">
-                Trạng thái chuyến bay
-              </Link>
-              {canOpenBackoffice ? (
-                <Link href="/backoffice" role="menuitem">
-                  Backoffice
+            {usesStaffAccountMenu ? (
+              <div className="account-menu-group">
+                <Link href="/account" role="menuitem">
+                  Thông tin cá nhân
                 </Link>
-              ) : null}
-            </div>
+                {canOpenBackoffice ? (
+                  <Link href="/backoffice" role="menuitem">
+                    Backoffice
+                  </Link>
+                ) : null}
+              </div>
+            ) : (
+              <>
+                <div className="account-menu-group">
+                  <Link href="/account" role="menuitem">
+                    Thông tin cá nhân
+                  </Link>
+                </div>
+                <div className="account-menu-group">
+                  <Link href="/manage-booking" role="menuitem">
+                    Vé của tôi
+                  </Link>
+                  <Link href="/check-in" role="menuitem">
+                    Làm thủ tục
+                  </Link>
+                  <Link href="/flight-status" role="menuitem">
+                    Trạng thái chuyến bay
+                  </Link>
+                  {canOpenBackoffice ? (
+                    <Link href="/backoffice" role="menuitem">
+                      Backoffice
+                    </Link>
+                  ) : null}
+                </div>
+              </>
+            )}
             <button
               type="button"
               className="account-menu-logout"
